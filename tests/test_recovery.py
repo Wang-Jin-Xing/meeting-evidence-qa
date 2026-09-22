@@ -50,6 +50,7 @@ def _no_stale_pending_jobs():
     yield
 
 
+
 def wait_for(cond, timeout: float = 30, msg: str = "条件等待超时"):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -102,6 +103,19 @@ def recording_of_job(job_id: int) -> int:
     return q(
         "SELECT recording_id FROM processing_job WHERE id = :j", j=job_id
     )[0][0]
+
+
+def _read_requests(path) -> list[dict]:
+    """读取 Provider 入口调用记录(本地:证明 mock 被调用,不证明服务商已接收)。"""
+    import json as _json
+
+    p = Path(path)
+    if not p.exists():
+        return []
+    return [
+        _json.loads(line)
+        for line in p.read_text(encoding="utf-8").splitlines() if line
+    ]
 
 
 # ---------- 场景 1:分片部分成功后接管 ----------
@@ -370,16 +384,18 @@ V2_TEXTS = [
 ]
 
 
-def test_index_partial_old_version_searchable_then_switch(client, session, two_orgs):
+def test_index_partial_old_version_searchable_then_switch(client, session, two_orgs, tmp_path):
     """索引部分完成时中断:旧发布版本仍可检索;新版本完成后原子切换,
-    且历史纪要引用的旧片段仍可解析。"""
+    且历史纪要引用的旧片段仍可解析。恢复完成后核对全部 embed 调用记录
+    (哪些结果被复用、哪些调用被重发,由 Provider 入口调用记录佐证)。"""
     from app.ai.mock_providers import MockEmbed
 
     meeting, job_id = upload(client, session, two_orgs["org_a"], two_orgs["a_admin"])
     user = two_orgs["a_admin"]
+    req_log = tmp_path / "req.jsonl"
 
     # 第一轮:正常完成,v1 发布
-    p = start_worker()
+    p = start_worker({"MEET_MOCK_REQUEST_LOG": str(req_log)})
     try:
         assert wait_job_status(job_id, {"succeeded", "failed"}) == "succeeded"
     finally:
@@ -449,12 +465,13 @@ def test_index_partial_old_version_searchable_then_switch(client, session, two_o
             {"j": job_id},
         )
         conn.execute(
-            text("UPDATE processing_job SET status = 'queued', attempt_count = 0 WHERE id = :j"),
+            text("UPDATE processing_job SET status = 'queued', attempt_count = 0, next_run_at = NULL WHERE id = :j"),
             {"j": job_id},
         )
 
     # 中断:embed 持续失败 3 次 → job 终态 failed(索引停在部分完成)
-    p2 = start_worker({"MEET_MOCK_EMBED_FAIL_ON_CALL": "1,2,3"})
+    p2 = start_worker({"MEET_MOCK_EMBED_FAIL_ON_CALL": "1,2,3",
+                       "MEET_MOCK_REQUEST_LOG": str(req_log)})
     try:
         assert wait_job_status(job_id, {"failed"}, timeout=60) == "failed"
     finally:
@@ -489,14 +506,29 @@ def test_index_partial_old_version_searchable_then_switch(client, session, two_o
             {"j": job_id},
         )
         conn.execute(
-            text("UPDATE processing_job SET status = 'queued', attempt_count = 0 WHERE id = :j"),
+            text("UPDATE processing_job SET status = 'queued', attempt_count = 0, next_run_at = NULL WHERE id = :j"),
             {"j": job_id},
         )
-    p3 = start_worker()
+    p3 = start_worker({"MEET_MOCK_REQUEST_LOG": str(req_log)})
     try:
         assert wait_job_status(job_id, {"succeeded", "failed"}, timeout=60) == "succeeded"
     finally:
         p3.terminate()
+
+    # 恢复完成后的全部 embed 调用记录(评审要求,解释 v2 完成过程):
+    # model_run:index = v1 轮 1 条 succeeded + 中断 3 条 failed + 恢复 1 条
+    # succeeded(预插 seg0 的 chunk 被对账复用,恢复仅嵌入剩余 2 片一批)
+    assert dict(q(
+        "SELECT status, count(*) FROM model_run"
+        " WHERE job_id = :j AND stage = 'index' GROUP BY status", j=job_id,
+    )) == {"succeeded": 2, "failed": 3}
+    # Provider 入口调用记录佐证物理调用次数:v1 批(size=3)+ 中断 3 次(size=2)
+    # + 恢复批(size=2,seg0 复用不重发)共 5 次 embed 请求
+    embed_reqs = [
+        r for r in _read_requests(req_log) if r["provider"] == "embed"
+    ]
+    assert [r["batch_size"] for r in embed_reqs] == [3, 2, 2, 2, 2], embed_reqs
+    assert q("SELECT count(*) FROM embedding_chunk WHERE version_id = :v", v=v2_id)[0][0] == 3
 
     # 切换后:v2 全部 active,指针切换,v1 不可见
     assert q("SELECT active_search_version_id FROM recording WHERE id = :r", r=rid)[0][0] == v2_id

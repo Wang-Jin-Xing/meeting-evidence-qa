@@ -4,22 +4,70 @@
 - 外部模型调用一律在事务之外(不持数据库锁调模型);
 - 每个阶段的所有业务产物与阶段成功状态在同一短事务提交(leased_transaction);
 - 执行器幂等:重复执行不产生重复版本/纪要/索引(对账 + 唯一约束);
-- 时间信息只来自切片边界(prepare 计算),模型不产生时间。
+- 时间信息只来自切片边界(prepare 计算),模型不产生时间;
+- 外部调用经 _call_provider 包装:单次调用超时 + 阶段执行期限(deadline),
+  超时抛 ProviderResultUnknownError(结果未知),超期抛 StageDeadlineError
+  (可重试)——防止心跳活着但任务永久卡在外部调用上。
 """
+import concurrent.futures as cf
 import hashlib
+import time
 import wave
 from dataclasses import dataclass
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from app.ai.providers import ASRProvider, EmbedProvider, LLMProvider, SegmentForLLM
+from app.ai.providers import (
+    ASRProvider,
+    EmbedProvider,
+    LLMProvider,
+    ProviderResultUnknownError,
+    SegmentForLLM,
+)
 from app.services.minutes_validator import validate_minutes, MinutesValidationError
 from app.worker.lease import LeaseLostError, leased_transaction
 
 
 class StageError(Exception):
     """阶段执行失败(可重试),携带用户可读原因。"""
+
+
+class StageDeadlineError(Exception):
+    """阶段执行超期:放弃本次执行并回队重试(心跳随之停止)。"""
+
+
+def _call_provider(func, timeout: float | None, *args, **kwargs):
+    """外部调用超时兜底:timeout 秒未返回 → ProviderResultUnknownError。
+
+    timeout=None 直接调用(禁用)。线程无法强杀,超时后泄漏线程最终自行
+    结束(能力边界);真实 Provider 应自带网络超时,本层为最后防线。
+    """
+    if timeout is None:
+        return func(*args, **kwargs)
+    if timeout <= 0:
+        raise StageDeadlineError("阶段执行期限已耗尽,不再发出外部调用")
+    executor = cf.ThreadPoolExecutor(max_workers=1)
+    try:
+        fut = executor.submit(func, *args, **kwargs)
+        try:
+            return fut.result(timeout=timeout)
+        except cf.TimeoutError as e:
+            raise ProviderResultUnknownError(
+                f"外部调用超时({timeout:.1f}s),结果未知"
+            ) from e
+    finally:
+        executor.shutdown(wait=False)
+
+
+def _call_timeout(provider_timeout: float, deadline: float | None) -> float | None:
+    """单次调用超时 = min(单调用超时, 阶段剩余期限)。"""
+    if deadline is None:
+        return provider_timeout if provider_timeout > 0 else None
+    remaining = deadline - time.monotonic()
+    if provider_timeout <= 0:
+        return remaining
+    return min(provider_timeout, remaining)
 
 
 @dataclass
@@ -163,7 +211,8 @@ def run_prepare(eng, ctx: JobContext, epoch: int, slice_seconds: int, should_abo
 
 # ---------- transcribe ----------
 
-def run_transcribe(eng, ctx: JobContext, epoch: int, asr: ASRProvider, should_abort):
+def run_transcribe(eng, ctx: JobContext, epoch: int, asr: ASRProvider, should_abort,
+                   provider_timeout: float = 60.0, deadline: float | None = None):
     """逐片转写:成功片写回并可复用;全部完成后单事务发布版本。"""
     # 对账:版本已发布
     with eng.connect() as conn:
@@ -214,13 +263,20 @@ def run_transcribe(eng, ctx: JobContext, epoch: int, asr: ASRProvider, should_ab
             out = cached[0]
         else:
             audio = _read_slice_audio(eng, ctx, slice_index)
-            # 两阶段记录:前置 unknown(结果未知),返回后补 succeeded
+            # 两阶段记录:前置 unknown(结果未知),返回后补 succeeded;
+            # 超时/断连类异常保留 unknown(结果未知),明确失败才记 failed
             run_id = _begin_model_run(
                 eng, ctx, stage="transcribe", provider=asr.name,
                 model_name=asr.model_name, input_hash=input_hash,
             )
             try:
-                result = asr.transcribe_slice(audio, slice_index)
+                result = _call_provider(
+                    asr.transcribe_slice,
+                    _call_timeout(provider_timeout, deadline),
+                    audio, slice_index,
+                )
+            except ProviderResultUnknownError:
+                raise  # 结果未知:保留 unknown,重发时同键留痕
             except Exception:
                 _fail_model_run(eng, run_id)
                 raise
@@ -297,7 +353,8 @@ def _read_slice_audio(eng, ctx: JobContext, slice_index: int) -> bytes:
 
 # ---------- minutes ----------
 
-def run_minutes(eng, ctx: JobContext, epoch: int, llm: LLMProvider, should_abort):
+def run_minutes(eng, ctx: JobContext, epoch: int, llm: LLMProvider, should_abort,
+                provider_timeout: float = 60.0, deadline: float | None = None):
     """基于 active 转写版本生成结构化纪要(经层1校验),幂等。"""
     # 对账:本 job 已产出纪要
     with eng.connect() as conn:
@@ -341,10 +398,14 @@ def run_minutes(eng, ctx: JobContext, epoch: int, llm: LLMProvider, should_abort
             prompt_version=llm.prompt_version,
         )
         try:
-            draft = llm.generate_minutes(
+            draft = _call_provider(
+                llm.generate_minutes,
+                _call_timeout(provider_timeout, deadline),
                 [SegmentForLLM(segment_id=s[0], seq=s[1], speaker=s[2], text=s[3])
-                 for s in segments]
+                 for s in segments],
             )
+        except ProviderResultUnknownError:
+            raise  # 结果未知:保留 unknown
         except Exception:
             _fail_model_run(eng, run_id)
             raise
@@ -414,7 +475,8 @@ def _active_segments(eng, recording_id: int):
 _INDEX_BATCH = 50
 
 
-def run_index(eng, ctx: JobContext, epoch: int, embed: EmbedProvider, should_abort):
+def run_index(eng, ctx: JobContext, epoch: int, embed: EmbedProvider, should_abort,
+              provider_timeout: float = 60.0, deadline: float | None = None):
     """为 active 转写版本建索引:分批插入(is_active=false),全部完成后原子切换。"""
     with eng.connect() as conn:
         active_search, active_transcript = conn.execute(
@@ -465,7 +527,13 @@ def run_index(eng, ctx: JobContext, epoch: int, embed: EmbedProvider, should_abo
                 model_name=embed.model_name, input_hash=input_hash,
             )
             try:
-                vectors = embed.embed_batch(texts)
+                vectors = _call_provider(
+                    embed.embed_batch,
+                    _call_timeout(provider_timeout, deadline),
+                    texts,
+                )
+            except ProviderResultUnknownError:
+                raise  # 结果未知:保留 unknown
             except Exception:
                 _fail_model_run(eng, run_id)
                 raise

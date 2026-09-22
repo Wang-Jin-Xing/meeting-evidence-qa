@@ -1,10 +1,14 @@
 """worker 主循环与 CLI 入口(python -m app.worker)。
 
-P1.2 能力边界(如实声明):
-- 阶段内重试(含跨进程失败后重跑)已支持并测试;
-- 租约过期回收路径已实现(claim 候选含过期 running),但
-  "杀死 worker 进程后的完整崩溃恢复"系统测试属 P2,本轮不宣称验证;
-- 无重试退避间隔(失败立即回队列),真实 Provider 接入前再评估。
+能力边界(如实声明,P2 收尾后):
+- 阶段内重试(含跨进程失败后重跑)已实现并测试;
+- 租约过期回收已实现,并经 worker 子进程 kill 的系统测试验证
+  ("kill → 租约过期 → 接管 epoch+1 → 产物唯一",见 tests/test_recovery.py);
+  被杀进程无法复活,"旧 worker 恢复后写入被拒"以进程内持旧 epoch 模拟;
+- 重试退避已实现(next_run_at,按 attempt 递增封顶),重试上限与费用预算
+  在 claim 侧参与调度;调用级预算预留尚未实现(长任务总开销不受约束);
+- 阶段执行带期限与单调用超时(见 stages._call_provider);超时后的调用线程
+  无法强杀,只保证任务不再阻塞,不保证远端已停止处理。
 """
 import argparse
 import sys
@@ -62,11 +66,22 @@ def _artifact_exists(eng, ctx: stages.JobContext, stage: str) -> bool:
 
 
 def process_job(eng, providers, job_id: int, settings, should_abort) -> str:
-    """执行一个已领取的任务,返回最终状态。"""
+    """执行一个已领取的任务,返回最终状态。
+
+    每阶段执行带期限(stage_deadline_seconds)与单调用超时
+    (provider_call_timeout_seconds):防止心跳活着但任务永久卡在
+    外部调用上——超时/超期后放弃本次执行并回队重试(心跳随之停止)。
+    """
     asr, llm, embed = providers
     epoch, _ = read_lease(eng, job_id)
     ctx = stages.load_context(eng, job_id)
 
+    def stage_deadline() -> float | None:
+        if settings.stage_deadline_seconds <= 0:
+            return None
+        return time.monotonic() + settings.stage_deadline_seconds
+
+    p_timeout = settings.provider_call_timeout_seconds
     for stage in STAGE_ORDER:
         stage_name = stage.value
         with eng.connect() as conn:
@@ -89,16 +104,25 @@ def process_job(eng, providers, job_id: int, settings, should_abort) -> str:
                     eng, ctx, epoch, settings.slice_seconds, should_abort
                 )
             elif stage_name == "transcribe":
-                stages.run_transcribe(eng, ctx, epoch, asr, should_abort)
+                stages.run_transcribe(
+                    eng, ctx, epoch, asr, should_abort,
+                    provider_timeout=p_timeout, deadline=stage_deadline(),
+                )
             elif stage_name == "minutes":
-                stages.run_minutes(eng, ctx, epoch, llm, should_abort)
+                stages.run_minutes(
+                    eng, ctx, epoch, llm, should_abort,
+                    provider_timeout=p_timeout, deadline=stage_deadline(),
+                )
             elif stage_name == "index":
-                stages.run_index(eng, ctx, epoch, embed, should_abort)
+                stages.run_index(
+                    eng, ctx, epoch, embed, should_abort,
+                    provider_timeout=p_timeout, deadline=stage_deadline(),
+                )
         except LeaseLostError:
             raise  # 租约丢失:放弃本任务全部提交,交由上层处理
         except Exception as e:
-            # StageError 及 Provider 等一切阶段异常:统一走失败/重试路径,
-            # 不让异常杀死 worker 进程
+            # StageError/StageDeadlineError/Provider 超时(结果未知)等
+            # 一切阶段异常:统一走失败/重试路径(带退避),不让异常杀死 worker
             with eng.connect() as conn:
                 attempt = conn.execute(
                     text("SELECT attempt_count FROM processing_job WHERE id = :j"),
@@ -107,6 +131,8 @@ def process_job(eng, providers, job_id: int, settings, should_abort) -> str:
             return requeue_or_fail(
                 eng, job_id, epoch, stage_name, f"{type(e).__name__}: {e}",
                 settings.worker_max_attempts, attempt,
+                backoff_seconds=settings.retry_backoff_seconds,
+                backoff_max_seconds=settings.retry_backoff_max_seconds,
             )
 
     # 收尾:全部阶段成功
@@ -115,7 +141,8 @@ def process_job(eng, providers, job_id: int, settings, should_abort) -> str:
             text(
                 "UPDATE processing_job SET status = 'succeeded',"
                 " current_stage = NULL, lease_expires_at = NULL,"
-                " last_error = NULL, updated_at = clock_timestamp()"
+                " next_run_at = NULL, last_error = NULL,"
+                " updated_at = clock_timestamp()"
                 " WHERE id = :j"
             ),
             {"j": job_id},
@@ -136,7 +163,9 @@ def run(idle_exit_seconds: float = 0.0) -> int:
     idle_since: float | None = None
 
     while True:
-        job_id = claim_job(engine, wid, ttl)
+        job_id = claim_job(
+            engine, wid, ttl, max_attempts=settings.worker_max_attempts
+        )
         if job_id is None:
             now = time.monotonic()
             if idle_exit_seconds > 0:

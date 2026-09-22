@@ -1,7 +1,7 @@
 """机构与用户。"""
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -13,6 +13,9 @@ class Organization(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200), unique=True)
+    # 费用预算(货币分,NULL=不限):组织累计模型费用(SUM(model_run.
+    # cost_estimate))达预算后,claim 不再领取该组织任务(预算参与调度)
+    budget_cents: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
 
     users: Mapped[list["User"]] = relationship(back_populates="organization")
 

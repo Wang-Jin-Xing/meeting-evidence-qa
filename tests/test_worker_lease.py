@@ -22,7 +22,11 @@ from app.worker.lease import (
 
 @pytest.fixture
 def queued_job(client, session, two_orgs):
-    """上传一段录音,返回 queued 状态的 job_id。"""
+    """上传一段录音,返回 queued 状态的 job_id。
+
+    teardown 置终态 failed:防止 running 残留的租约在 60s 后过期,
+    被后续测试模块的 worker 当作可回收任务抢先领取(注入错位)。
+    """
     meeting = make_meeting(session, two_orgs["org_a"], two_orgs["a_admin"])
     headers = auth_headers(client, two_orgs["a_admin"].username)
     resp = client.post(
@@ -31,7 +35,16 @@ def queued_job(client, session, two_orgs):
         headers=headers,
     )
     assert resp.status_code == 202
-    return resp.json()["job_id"]
+    job_id = resp.json()["job_id"]
+    yield job_id
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE processing_job SET status = 'failed',"
+                " lease_expires_at = NULL WHERE id = :j"
+            ),
+            {"j": job_id},
+        )
 
 
 def test_concurrent_claim_single_winner(queued_job):

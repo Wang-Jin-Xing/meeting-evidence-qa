@@ -50,6 +50,36 @@ class Settings(BaseSettings):
             "worker_max_attempts", "MEET_WORKER_MAX_ATTEMPTS"
         ),
     )
+    # 单次外部调用超时(秒):超时抛结果未知(unknown),防止任务永久卡住;
+    # 真实 Provider 应自带网络超时,本层为最后防线
+    provider_call_timeout_seconds: float = Field(
+        default=60.0,
+        validation_alias=AliasChoices(
+            "provider_call_timeout_seconds", "MEET_WORKER_PROVIDER_TIMEOUT_SECONDS"
+        ),
+    )
+    # 单阶段执行期限(秒):阶段内所有调用共享该期限,超期放弃本次执行
+    # 并回队重试(心跳随之停止,防止心跳活着但任务无进展);0 = 不限
+    stage_deadline_seconds: float = Field(
+        default=300.0,
+        validation_alias=AliasChoices(
+            "stage_deadline_seconds", "MEET_WORKER_STAGE_DEADLINE_SECONDS"
+        ),
+    )
+    # 重试退避:失败后延迟 next_run_at = now + min(attempt * base, cap) 秒;
+    # base=0 禁用退避(立即重试,兼容旧行为)
+    retry_backoff_seconds: float = Field(
+        default=5.0,
+        validation_alias=AliasChoices(
+            "retry_backoff_seconds", "MEET_WORKER_RETRY_BACKOFF_SECONDS"
+        ),
+    )
+    retry_backoff_max_seconds: float = Field(
+        default=60.0,
+        validation_alias=AliasChoices(
+            "retry_backoff_max_seconds", "MEET_WORKER_RETRY_BACKOFF_MAX_SECONDS"
+        ),
+    )
     # 音频切片时长(秒):切片边界即片段级时间信息来源
     slice_seconds: int = 10
 

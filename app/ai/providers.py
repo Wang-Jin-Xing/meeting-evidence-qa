@@ -6,6 +6,14 @@ worker 只依赖这些接口;mock 与真实适配器(P3)分别实现。
 from dataclasses import dataclass, field
 
 
+class ProviderResultUnknownError(Exception):
+    """调用已发出但无法确认远端执行结果(超时/连接中断)。
+
+    该类异常不得把 model_run 记为 failed——结果未知即保留 unknown,
+    重发时同键留痕(不宣称避免重复调用/计费)。
+    """
+
+
 @dataclass
 class ASRSlice:
     """一个音频分片的转写结果。时间信息由调用方(切片边界)提供,ASR 不产生时间。"""

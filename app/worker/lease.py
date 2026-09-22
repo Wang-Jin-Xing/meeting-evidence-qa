@@ -27,11 +27,15 @@ def worker_id() -> str:
     return f"{uuid.uuid4().hex[:8]}@{uuid.uuid4().hex[:4]}"
 
 
-def claim_job(eng: Engine, wid: str, ttl_seconds: int) -> int | None:
+def claim_job(eng: Engine, wid: str, ttl_seconds: int, max_attempts: int = 3) -> int | None:
     """原子领取一个任务,返回 job_id;无任务返回 None。
 
-    领取事务内完成并立即提交;候选含 queued 与租约过期的 running
-    (过期回收路径已实现,系统性崩溃恢复测试属 P2,当前不宣称验证)。
+    领取事务内完成并立即提交。调度守卫(P2 收尾):
+    - 候选含 queued 与租约过期的 running(过期回收);
+    - attempt_count 达上限的任务不领取(重试上限参与调度);
+    - next_run_at 未到的任务不领取(失败退避);
+    - 组织累计模型费用(SUM(model_run.cost_estimate))已达预算
+      (organization.budget_cents,NULL=不限)的任务不领取(费用预算参与调度)。
     """
     sql = text(
         """
@@ -43,10 +47,19 @@ def claim_job(eng: Engine, wid: str, ttl_seconds: int) -> int | None:
             attempt_count = attempt_count + 1,
             updated_at = clock_timestamp()
         WHERE id = (
-            SELECT id FROM processing_job
-            WHERE status = 'queued'
-               OR (status = 'running' AND lease_expires_at < clock_timestamp())
-            ORDER BY created_at
+            SELECT j.id FROM processing_job j
+            JOIN recording r ON r.id = j.recording_id
+            JOIN meeting m ON m.id = r.meeting_id
+            JOIN organization o ON o.id = m.org_id
+            WHERE (j.status = 'queued'
+                   OR (j.status = 'running' AND j.lease_expires_at < clock_timestamp()))
+              AND (j.next_run_at IS NULL
+                   OR j.next_run_at <= clock_timestamp()::timestamp)
+              AND j.attempt_count < :max_attempts
+              AND (o.budget_cents IS NULL OR o.budget_cents > COALESCE((
+                    SELECT SUM(mr.cost_estimate) FROM model_run mr
+                    WHERE mr.org_id = o.id), 0))
+            ORDER BY j.created_at
             LIMIT 1
             FOR UPDATE SKIP LOCKED
         )
@@ -54,7 +67,9 @@ def claim_job(eng: Engine, wid: str, ttl_seconds: int) -> int | None:
         """
     )
     with eng.begin() as conn:
-        row = conn.execute(sql, {"ttl": str(ttl_seconds), "wid": wid}).fetchone()
+        row = conn.execute(
+            sql, {"ttl": str(ttl_seconds), "wid": wid, "max_attempts": max_attempts}
+        ).fetchone()
     return row[0] if row else None
 
 
@@ -137,18 +152,25 @@ def leased_transaction(eng: Engine, job_id: int, epoch: int):
 
 
 def requeue_or_fail(
-    eng: Engine,
+    eng,
     job_id: int,
     epoch: int,
     stage_name: str,
     error: str,
     max_attempts: int,
     attempt_count: int,
+    backoff_seconds: float = 0.0,
+    backoff_max_seconds: float = 60.0,
 ) -> str:
     """阶段失败后的短事务处理:记录错误,回 queued 或终态 failed。
 
     返回新状态。attempt_count 为领取时已累计的值(claim 时 +1 过)。
+    回队时写入退避:next_run_at = now + min(attempt * backoff, cap);
+    backoff_seconds=0 禁用(立即可领)。
     """
+    backoff = 0.0
+    if backoff_seconds > 0 and attempt_count < max_attempts:
+        backoff = min(attempt_count * backoff_seconds, backoff_max_seconds)
     with leased_transaction(eng, job_id, epoch) as conn:
         conn.execute(
             text(
@@ -168,9 +190,14 @@ def requeue_or_fail(
             text(
                 "UPDATE processing_job SET status = :st,"
                 " last_error = :err, current_stage = :stage,"
-                " lease_expires_at = NULL, updated_at = clock_timestamp()"
+                " lease_expires_at = NULL,"
+                " next_run_at = CASE WHEN CAST(:st AS varchar) = 'queued'"
+                "  THEN clock_timestamp()::timestamp + (:backoff || ' seconds')::interval"
+                "  ELSE NULL END,"
+                " updated_at = clock_timestamp()"
                 " WHERE id = :job_id"
             ),
-            {"st": new_status, "err": error, "stage": stage_name, "job_id": job_id},
+            {"st": new_status, "err": error, "stage": stage_name,
+             "job_id": job_id, "backoff": str(backoff)},
         )
     return new_status

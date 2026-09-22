@@ -20,6 +20,8 @@ def start_worker(extra_env: dict | None = None, idle_exit: float = 10) -> subpro
         "PYTHONUTF8": "1",
         "MEET_WORKER_POLL_SECONDS": "0.2",
         "MEET_WORKER_LEASE_TTL_SECONDS": "60",
+        # 默认禁用重试退避(保持既有测试时序);退避行为由故障测试显式覆盖
+        "MEET_WORKER_RETRY_BACKOFF_SECONDS": "0",
     }
     env.update(extra_env or {})
     return subprocess.Popen(

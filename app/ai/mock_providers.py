@@ -13,8 +13,20 @@
   MEET_MOCK_KILL_AFTER_CALL=N  全局第 N 次任意 Provider 调用返回后
                                os._exit(70) 立即自杀(模拟进程死于
                                "模型已响应、结果未提交"窗口,恢复测试用)
+  MEET_MOCK_ASR_UNKNOWN_ON_CALL=N 第 N 次 ASR 调用抛结果未知异常
+                               (模拟超时/断连:请求已发出,远端结果不可知)
+  MEET_MOCK_ASR_HANG_ON_CALL=N 第 N 次 ASR 调用挂起 1 小时
+                               (验证调用超时兜底,由 stages 的包装打断)
+  MEET_MOCK_REQUEST_LOG=path   Provider 入口调用记录(本地 JSONL):mock Provider
+                               方法一被调用就在入口记一行,与 model_run 完全独立。
+                               口径必须准确:它证明"我方发出了这次调用及其入参
+                               规模",不能证明真实服务商收到请求(真实接入需按
+                               服务商请求 ID/账单另行核对)。
+  MEET_MOCK_ASR_CORPUS_FILE=path 自定义语料 JSON([["说话人","文本"],...],
+                               评测框架用;默认内置虚构语料)
 """
 import hashlib
+import json
 import math
 import os
 import threading
@@ -27,6 +39,7 @@ from app.ai.providers import (
     LLMProvider,
     MinutesDraft,
     MinutesItemDraft,
+    ProviderResultUnknownError,
     QACandidate,
     QAAnswer,
     SegmentForLLM,
@@ -91,11 +104,75 @@ def _kill_after_call() -> None:
         os._exit(70)
 
 
+def _log_request(provider: str, call: str, **detail) -> None:
+    """Provider 入口调用记录:mock Provider 方法被调用即在本地追加一行 JSON。
+
+    口径:证明"这次调用确实发出且进入 Provider 实现",与 model_run 独立
+    (后者只证明调用意图与远端结果状态)。它**不**证明真实服务商收到请求,
+    也不证明计费次数;真实 Provider 接入后需以服务商请求 ID/账单另行核对。
+    记录点在各 Provider 方法最开头(先于延迟/故障注入)。
+    """
+    path = os.environ.get("MEET_MOCK_REQUEST_LOG")
+    if not path:
+        return
+    rec = {"ts": round(time.time(), 3), "provider": provider, "call": call, **detail}
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
+_corpus_cache = None
+
+
+def get_corpus() -> list[tuple[str, str]]:
+    """当前语料:MEET_MOCK_ASR_CORPUS_FILE 指定的自定义语料,否则内置。
+
+    进程级缓存(worker 子进程启动后语料不变)。评测框架用自定义语料
+    构造不同会谈内容,实现按会谈划分的 dev/test 数据。
+    """
+    global _corpus_cache
+    if _corpus_cache is None:
+        path = os.environ.get("MEET_MOCK_ASR_CORPUS_FILE")
+        if path:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            _corpus_cache = [(str(s), str(t)) for s, t in data]
+        else:
+            _corpus_cache = CORPUS
+    return _corpus_cache
+
+
+def _unknown_on_call(key: str) -> bool:
+    """第 N 次调用抛结果未知(超时/断连语义:请求已发出,结果不可知)。"""
+    v = os.environ.get(f"MEET_MOCK_{key}_UNKNOWN_ON_CALL")
+    if v is None:
+        return False
+    n = _counter.next(f"{key}_UNKNOWN")
+    return str(n) in [x.strip() for x in v.split(",")]
+
+
+def _hang_on_call(key: str) -> bool:
+    """第 N 次调用挂起 1 小时(由 stages 的调用超时包装打断)。"""
+    v = os.environ.get(f"MEET_MOCK_{key}_HANG_ON_CALL")
+    if v is None:
+        return False
+    n = _counter.next(f"{key}_HANG")
+    return str(n) in [x.strip() for x in v.split(",")]
+
+
 class MockASR(ASRProvider):
     name = "mock-asr"
     model_name = "mock-asr-v1"
 
     def transcribe_slice(self, audio: bytes, slice_index: int) -> ASRSlice:
+        # 入口即记录(先于延迟/故障注入):证明本次调用确实发出
+        _log_request("asr", "transcribe_slice",
+                     slice_index=slice_index, audio_bytes=len(audio))
+        if _hang_on_call("ASR"):
+            time.sleep(3600)  # 由 stages 调用超时包装打断
+        if _unknown_on_call("ASR"):
+            raise ProviderResultUnknownError(
+                "[mock] 注入: ASR 调用结果未知(超时/断连语义)"
+            )
         delay = os.environ.get("MEET_MOCK_ASR_DELAY_MS")
         if delay:
             time.sleep(int(delay) / 1000)
@@ -104,7 +181,7 @@ class MockASR(ASRProvider):
             raise RuntimeError(f"[mock] 注入: 分片 {slice_index} 转写失败")
         if _fail_on_call("ASR"):
             raise RuntimeError("[mock] 注入: ASR 调用失败(第N次)")
-        speaker, text = CORPUS[slice_index % len(CORPUS)]
+        speaker, text = get_corpus()[slice_index % len(get_corpus())]
         _kill_after_call()
         return ASRSlice(speaker=speaker, text=text, is_mock=True)
 
@@ -116,6 +193,7 @@ class MockLLM(LLMProvider):
     prompt_version = "mock-rules-v1"
 
     def generate_minutes(self, segments: list[SegmentForLLM]) -> MinutesDraft:
+        _log_request("llm", "generate_minutes", segments=len(segments))
         if _fail_on_call("LLM"):
             raise RuntimeError("[mock] 注入: LLM 调用失败(第N次)")
         items: list[MinutesItemDraft] = []
@@ -228,6 +306,7 @@ class MockEmbed(EmbedProvider):
     model_name = "mock-embed-bigram-v1"
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        _log_request("embed", "embed_batch", batch_size=len(texts))
         if _fail_on_call("EMBED"):
             raise RuntimeError("[mock] 注入: Embed 调用失败(第N次)")
         vectors = [self._embed_one(t) for t in texts]

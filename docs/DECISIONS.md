@@ -2,6 +2,40 @@
 
 按时间倒序追加。每条注明状态:设计/已实现/部分实现。
 
+## P2 收尾(2026-09-23)
+
+- **D-33 Provider 入口调用记录(命名口径纠偏)**:新增 `MEET_MOCK_REQUEST_LOG`
+  在三个 mock Provider 方法**最开头**(先于延迟与故障注入)追加 JSON 行。
+  定性必须准确:这是**本地 Provider 入口调用记录**,能证明"Provider 被调用了几次、
+  入参规模多大",**不能证明真实服务商收到请求**。`model_run` 的前置 unknown 行只证明
+  调用意图;两者独立并列,才区分出"意图 / 我方发出 / 远端结果 / 业务提交"四层。
+  真实 Provider 接入后需以服务商返回的请求 ID 与账单核对(待验证,不宣称已具备)。
+  已实现。
+- **D-34 调用结果四态分类**:`ProviderResultUnknownError`(超时/断连——请求已发出、
+  远端结果不可知)保留 model_run=unknown 并原样上抛;**明确执行失败**才记 failed
+  (`_fail_model_run`)。测试分别注入并断言 `unknown ≥ 1 / failed = 0` 与
+  `failed = 1 / unknown = 0` 两种形态,不混用。已实现。
+- **D-35 三层时间约束(心跳存活≠任务有进展)**:① 单次外部调用超时
+  `provider_call_timeout_seconds`(默认 60s,`_call_provider` 用独立线程 +
+  `fut.result(timeout)` 兜底);② 单阶段执行期限 `stage_deadline_seconds`(默认 300s,
+  期限内所有调用共享,超期抛 `StageDeadlineError` 且**不再发出新调用**);
+  ③ 租约 TTL(既有)。实际单调用超时 = min(①, 阶段剩余期限)。
+  **能力边界(如实声明)**:Python 线程无法强杀,超时后的挂起调用线程会泄漏直到自行
+  结束,故"超时"只保证任务不再阻塞、不保证远端已停;真实 Provider 必须自带网络超时,
+  本层为最后防线。已实现。
+- **D-36 重试退避与调度守卫前移到 claim**:失败回队写
+  `next_run_at = now + min(attempt * base, cap)`(base=0 禁用,保持既有时序);
+  `claim_job` 增加三重候选过滤:`attempt_count < worker_max_attempts`、
+  `next_run_at <= clock_timestamp()`、组织累计费用未达 `organization.budget_cents`
+  (NULL=不限)。使"重试上限/退避/预算"真正参与调度,而非仅记录。
+  **已知不足**:只在领取时比较历史费用,无法约束单个长任务的总开销;调用级预留
+  检查在后续阶段补(见 P3 的 D-38)。已实现(仅领取侧)。
+- **D-37 恢复复用的证据口径**:恢复类测试必须同时核对三样东西——
+  DB 状态、产物数量、调用留痕;并且区分**"结果没有重复"**(每 input_hash 恰好一条
+  succeeded)与**"外部调用没有重复"**(入口调用日志的物理请求数)。
+  索引中断恢复用例据此断言 `model_run {succeeded:2, failed:3}` + 请求批大小
+  `[3,2,2,2,2]`(已提交分片被对账复用、不重发),而非只断言"最终成功"。已实现。
+
 ## P2(2026-09-23)
 
 - **D-27(修 P1.2 遗留)MEET_WORKER_* 环境变量从未生效**:Settings 无 env_prefix,字段只认 `WORKER_LEASE_TTL_SECONDS` 等无前缀名,测试注入的 `MEET_WORKER_*` 一直被忽略(P1.2 测试碰巧不依赖 TTL 过期所以全绿)。修复:worker_* 三字段加 AliasChoices 双名兼容。P2 恢复测试正是靠短 TTL 注入发现此缺陷。已实现(诊断脚本实证:kill 后租约 117s 不过期 → 修复后 2s 过期)。
