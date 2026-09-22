@@ -26,3 +26,15 @@ def test_readiness_db_up():
     body = resp.json()
     assert body["database"] == "up"
     assert body["check"] == "readiness"
+
+
+def test_demo_ui_and_static_assets_served():
+    """界面与静态资源必须可访问(演示当天打不开页面即为阻塞)。"""
+    page = client.get("/")
+    assert page.status_code == 200
+    assert "text/html" in page.headers["content-type"]
+    assert "会谈纪要与证据问答" in page.text
+    for asset in ("/static/app.js", "/static/style.css"):
+        r = client.get(asset)
+        assert r.status_code == 200, asset
+        assert len(r.content) > 200, asset

@@ -144,6 +144,7 @@ function renderRecordings(recs) {
     <div class="rec">
       <div><b>${esc(r.original_filename)}</b>
         <span class="sub">SHA-256 ${esc(r.checksum.slice(0, 12))}…</span></div>
+      <div class="sub">转写来源:${transcriptLabel(r)}</div>
       <div class="sub">任务 #${r.job_id} 状态:
         <span id="st-${r.job_id}">${esc(r.job_status || "-")}</span>
         ${r.job_current_stage ? "· 当前阶段 " + esc(r.job_current_stage) : ""}</div>
@@ -153,6 +154,18 @@ function renderRecordings(recs) {
 }
 
 const STAGES = ["prepare", "transcribe", "minutes", "index"];
+
+const SOURCE_LABEL = {
+  asr: "自动转写(ASR)", human_transcription: "人工转写导入",
+  human_correction: "人工校对(在既有版本上追加)", re_asr: "重新转写",
+};
+
+function transcriptLabel(r) {
+  if (!r.transcript_source) return '<span class="hint">尚无转写版本</span>';
+  const mock = r.transcript_source === "asr";   // asr 版本由当前配置的 ASR 产出
+  return `v${r.transcript_version_no} · ${esc(SOURCE_LABEL[r.transcript_source] || r.transcript_source)}`
+    + (mock ? ' <span class="tag mock">来自 mock ASR</span>' : "");
+}
 
 function pollJob(jobId) {
   clearInterval(state.pollers[jobId]);

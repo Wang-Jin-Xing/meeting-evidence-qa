@@ -68,6 +68,11 @@ def test_import_human_transcript_builds_first_version(client, session, two_orgs)
     assert body["minutes"]["items"] >= 1
     assert body["providers"]["all_mock"] is True
 
+    # 详情接口显示转写来源(界面据此区分人工导入与 mock 自动转写)
+    detail = client.get(f"/meetings/{meeting.id}", headers=headers).json()
+    assert detail["recordings"][0]["transcript_source"] == "human_transcription"
+    assert detail["recordings"][0]["transcript_version_no"] == 1
+
     # 转写与检索指针都指向人工转写版本
     row = engine.connect().execute(
         text("SELECT active_transcript_version_id, active_search_version_id"

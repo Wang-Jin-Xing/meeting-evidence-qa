@@ -42,6 +42,10 @@ class RecordingBrief(BaseModel):
     job_id: int | None
     job_status: str | None
     job_current_stage: str | None
+    # 当前转写来源(asr / human_transcription / human_correction / re_asr):
+    # 界面必须显示文本到底来自自动转写还是人工导入,不与 mock 转写混记
+    transcript_version_no: int | None = None
+    transcript_source: str | None = None
 
     model_config = {"from_attributes": True}
 

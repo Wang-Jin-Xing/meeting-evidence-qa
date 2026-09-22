@@ -6,6 +6,7 @@ from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.models.meeting import Meeting
 from app.models.org import MeetingAccess, User
+from app.models.transcript import TranscriptVersion
 from app.schemas.meeting import MeetingCreate, MeetingDetail, MeetingOut, RecordingBrief
 from app.services.access import get_accessible_meeting, visible_meeting_condition
 
@@ -81,6 +82,10 @@ def get_meeting(
     recordings = []
     for rec in meeting.recordings:
         job = rec.job
+        active_version = (
+            db.get(TranscriptVersion, rec.active_transcript_version_id)
+            if rec.active_transcript_version_id else None
+        )
         recordings.append(
             RecordingBrief(
                 id=rec.id,
@@ -89,6 +94,10 @@ def get_meeting(
                 job_id=job.id if job else None,
                 job_status=job.status.value if job else None,
                 job_current_stage=job.current_stage if job else None,
+                transcript_version_no=(active_version.version_no
+                                       if active_version else None),
+                transcript_source=(active_version.source_type.value
+                                   if active_version else None),
             )
         )
     # 会话内先按 MeetingOut 取标量字段,再显式挂 recordings:
