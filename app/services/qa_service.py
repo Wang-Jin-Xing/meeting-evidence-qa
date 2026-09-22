@@ -94,16 +94,21 @@ def ask_question(db: Session, user: User, meeting: Meeting, question: str) -> An
 
     def insufficient() -> AnswerOut:
         # 明确返回证据不足:无回答、无引用(不拼接候选冒充答案)。
-        # retrieved_count=过阈值候选数:0 表示无相关候选(无索引/不相关/
-        # 未发布版本被指针排除),>0 表示相关但焦点线索缺失
-        _log_query(db, user, question, rows, answer=None, cited=[], sufficient=False)
+        # raw=阈值前检索数(检索了什么);relevant=过阈值候选数
+        # (0=无相关候选:无索引/不相关/未发布版本被指针排除;
+        #  >0=相关但焦点线索缺失)
+        _log_query(
+            db, user, question, rows, relevant=len(candidates),
+            answer=None, cited=[], sufficient=False,
+        )
         return AnswerOut(
             meeting_id=meeting.id,
             question=question,
             answer=None,
             has_sufficient_evidence=False,
             is_mock=True,
-            retrieved_count=len(candidates),
+            raw_retrieved_count=len(rows),
+            relevant_candidate_count=len(candidates),
             citations=[],
         )
 
@@ -135,7 +140,7 @@ def ask_question(db: Session, user: User, meeting: Meeting, question: str) -> An
     citations = [cited_map[sid] for sid in result.cited_segment_ids]
 
     _log_query(
-        db, user, question, rows,
+        db, user, question, rows, relevant=len(candidates),
         answer=result.text, cited=result.cited_segment_ids, sufficient=True,
     )
     return AnswerOut(
@@ -144,7 +149,8 @@ def ask_question(db: Session, user: User, meeting: Meeting, question: str) -> An
         answer=result.text,
         has_sufficient_evidence=True,
         is_mock=result.is_mock,
-        retrieved_count=len(candidates),
+        raw_retrieved_count=len(rows),
+        relevant_candidate_count=len(candidates),
         citations=[
             CitationOut(
                 segment_id=c.segment_id, seq=c.seq, speaker=c.speaker, text=c.text,
@@ -155,12 +161,13 @@ def ask_question(db: Session, user: User, meeting: Meeting, question: str) -> An
     )
 
 
-def _log_query(db, user, question, rows, *, answer, cited, sufficient):
+def _log_query(db, user, question, rows, *, relevant, answer, cited, sufficient):
     db.add(
         QueryLog(
             user_id=user.id,
             question=question,
-            retrieved_chunk_ids=[r[0] for r in rows],
+            retrieved_chunk_ids=[r[0] for r in rows],  # 阈值前原始候选
+            relevant_candidate_count=relevant,          # 过阈值候选数
             answer=answer,
             cited_segment_ids=list(cited),
             has_sufficient_evidence=sufficient,

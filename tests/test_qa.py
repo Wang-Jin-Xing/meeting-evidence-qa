@@ -153,7 +153,7 @@ def test_ask_insufficient_evidence_explicit(client, qa_world):
     assert body["answer"] is None
     assert body["citations"] == []
     assert body["is_mock"] is True
-    assert body["retrieved_count"] == 0, "无关问题不应有过阈值的候选"
+    assert body["relevant_candidate_count"] == 0, "无关问题不应有过阈值的候选"
 
 
 def test_ask_permission_injected_in_candidates(client, qa_world):
@@ -239,7 +239,7 @@ def test_ask_unpublished_version_misflagged_active_not_retrieved(
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["retrieved_count"] == 0, "误标 active 的未发布版本不得进入候选"
+        assert body["relevant_candidate_count"] == 0, "误标 active 的未发布版本不得进入候选"
         assert body["has_sufficient_evidence"] is False
         assert body["answer"] is None
         assert body["citations"] == []
@@ -268,7 +268,7 @@ def test_ask_unpublished_version_misflagged_active_not_retrieved(
 def test_ask_related_but_missing_focus_clue_insufficient(client, qa_world, question):
     """候选相关(过相关性阈值)但问题焦点线索缺失:证据不足。
 
-    区别于完全不相关(retrieved_count=0):此处候选非空,但询问的
+    区别于完全不相关(relevant_candidate_count=0):此处候选非空,但询问的
     日期/负责人/时长未出现,不得拼接候选冒充答案。
     """
     resp = client.post(
@@ -278,14 +278,18 @@ def test_ask_related_but_missing_focus_clue_insufficient(client, qa_world, quest
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["retrieved_count"] > 0, "前置:问题与候选相关,非完全不相关"
+    assert body["relevant_candidate_count"] > 0, "前置:问题与候选相关,非完全不相关"
     assert body["has_sufficient_evidence"] is False
     assert body["answer"] is None
     assert body["citations"] == []
 
 
 def test_query_log_written(client, qa_world):
-    """问答审计:候选/回答/引用/充分性/mock 标识全部落库(充分路径)。"""
+    """问答审计:候选/回答/引用/充分性/mock 标识全部落库(充分路径)。
+
+    计数口径:retrieved_chunk_ids=阈值前原始候选(与 relevant_candidate_count
+    分离,避免数量与 ID 列表口径混淆)。
+    """
     question = "注册证和检测报告什么时候补齐?"  # 片1 含日期线索 → 充分
     resp = client.post(
         f"/meetings/{qa_world['meeting_a_id']}/ask",
@@ -298,19 +302,21 @@ def test_query_log_written(client, qa_world):
     with engine.connect() as conn:
         row = conn.execute(
             text(
-                "SELECT user_id, retrieved_chunk_ids, answer, cited_segment_ids,"
-                " has_sufficient_evidence, is_mock"
+                "SELECT user_id, retrieved_chunk_ids, relevant_candidate_count,"
+                " answer, cited_segment_ids, has_sufficient_evidence, is_mock"
                 " FROM query_log WHERE question = :q ORDER BY id DESC LIMIT 1"
             ),
             {"q": question},
         ).fetchone()
     assert row is not None
     assert row[0] == qa_world["a_admin_id"]
-    assert row[1]  # 检索候选已记录
-    assert row[2] == body["answer"]
-    assert row[3] == [c["segment_id"] for c in body["citations"]]
-    assert row[4] is True
+    assert row[1]  # 原始检索候选(阈值前)已记录
+    assert len(row[1]) == body["raw_retrieved_count"]
+    assert row[2] == body["relevant_candidate_count"]
+    assert row[3] == body["answer"]
+    assert row[4] == [c["segment_id"] for c in body["citations"]]
     assert row[5] is True
+    assert row[6] is True
 
 
 # ---------- 问答:权限与边界 ----------
@@ -348,7 +354,7 @@ def test_ask_meeting_without_index_returns_insufficient(client, session, two_org
     assert resp.status_code == 200
     body = resp.json()
     assert body["has_sufficient_evidence"] is False
-    assert body["retrieved_count"] == 0
+    assert body["relevant_candidate_count"] == 0
     assert body["citations"] == []
 
 

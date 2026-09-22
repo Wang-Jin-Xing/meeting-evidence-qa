@@ -1,14 +1,15 @@
 """模型调用记录(可复现与成本核算)。
 
 - input_hash:规范化输入+prompt 版本的哈希,用于"结果缓存"(相同内容复用输出);
-- idempotency_key:含机构与逻辑任务的稳定键(不含 attempt),用于"请求幂等",
-  仅在服务商支持请求级幂等时实际生效,是否已发送由 idempotency_key_sent 记录;
-- 两者是分开的机制,不混用(设计约定);
-- status=unknown:超时/断连等结果未知调用,预留估算费用计入费用上限。
+- idempotency_key:发送给服务商的请求幂等键(服务商支持时重发同键可去重),
+  不是审计主键——model_run 行 = 一次物理调用的事实记录,同键可多行
+  (P2 修订:崩溃恢复中"结果未知的调用 + 重发调用"各自留痕);
+- status=unknown:调用已发出但结果未知(进程死亡/超时/断连),
+  该行即"可能重复调用/计费"的审计证据,不宣称避免。
 """
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Integer, Numeric, String, UniqueConstraint, func
+from sqlalchemy import DateTime, Enum, Index, Integer, Numeric, String, func
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,7 +20,7 @@ from app.models.enums import ModelRunStatus
 class ModelRun(Base):
     __tablename__ = "model_run"
     __table_args__ = (
-        UniqueConstraint("idempotency_key"),
+        Index("ix_model_run_idempotency_key", "idempotency_key"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

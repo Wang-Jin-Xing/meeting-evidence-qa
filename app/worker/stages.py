@@ -214,13 +214,18 @@ def run_transcribe(eng, ctx: JobContext, epoch: int, asr: ASRProvider, should_ab
             out = cached[0]
         else:
             audio = _read_slice_audio(eng, ctx, slice_index)
-            result = asr.transcribe_slice(audio, slice_index)
-            out = {"speaker": result.speaker, "text": result.text}
-            _record_model_run(
+            # 两阶段记录:前置 unknown(结果未知),返回后补 succeeded
+            run_id = _begin_model_run(
                 eng, ctx, stage="transcribe", provider=asr.name,
                 model_name=asr.model_name, input_hash=input_hash,
-                output_ref=out, is_mock=result.is_mock,
             )
+            try:
+                result = asr.transcribe_slice(audio, slice_index)
+            except Exception:
+                _fail_model_run(eng, run_id)
+                raise
+            out = {"speaker": result.speaker, "text": result.text}
+            _finish_model_run(eng, run_id, out)
         # 分片结果短事务提交(租约守卫)
         with leased_transaction(eng, ctx.job_id, epoch) as conn:
             conn.execute(
@@ -329,10 +334,20 @@ def run_minutes(eng, ctx: JobContext, epoch: int, llm: LLMProvider, should_abort
     if cached is not None:
         run_id, content = cached[0], cached[1]
     else:
-        draft = llm.generate_minutes(
-            [SegmentForLLM(segment_id=s[0], seq=s[1], speaker=s[2], text=s[3])
-             for s in segments]
+        # 两阶段记录:前置 unknown(结果未知),返回后补 succeeded
+        run_id = _begin_model_run(
+            eng, ctx, stage="minutes", provider=llm.name,
+            model_name=llm.model_name, input_hash=input_hash,
+            prompt_version=llm.prompt_version,
         )
+        try:
+            draft = llm.generate_minutes(
+                [SegmentForLLM(segment_id=s[0], seq=s[1], speaker=s[2], text=s[3])
+                 for s in segments]
+            )
+        except Exception:
+            _fail_model_run(eng, run_id)
+            raise
         content = {
             "items": [
                 {
@@ -344,12 +359,7 @@ def run_minutes(eng, ctx: JobContext, epoch: int, llm: LLMProvider, should_abort
                 for it in draft.items
             ]
         }
-        run_id = _record_model_run(
-            eng, ctx, stage="minutes", provider=llm.name,
-            model_name=llm.model_name, input_hash=input_hash,
-            prompt_version=llm.prompt_version, output_ref=content,
-            is_mock=draft.is_mock,
-        )
+        _finish_model_run(eng, run_id, content)
 
     # 层1校验:引用存在 + 空值策略;失败则本阶段失败(不落库)
     try:
@@ -449,12 +459,17 @@ def run_index(eng, ctx: JobContext, epoch: int, embed: EmbedProvider, should_abo
         if cached is not None:
             vectors = [tuple(v) for v in cached[0]["vectors"]]
         else:
-            vectors = embed.embed_batch(texts)
-            _record_model_run(
+            # 两阶段记录:前置 unknown(结果未知),返回后补 succeeded
+            run_id = _begin_model_run(
                 eng, ctx, stage="index", provider=embed.name,
                 model_name=embed.model_name, input_hash=input_hash,
-                output_ref={"vectors": vectors}, is_mock=True,
             )
+            try:
+                vectors = embed.embed_batch(texts)
+            except Exception:
+                _fail_model_run(eng, run_id)
+                raise
+            _finish_model_run(eng, run_id, {"vectors": vectors})
         # 批量写入短事务(租约守卫);is_active=false,发布前检索不可见
         with leased_transaction(eng, ctx.job_id, epoch) as conn:
             for seg, vec in zip(batch, vectors):
@@ -472,14 +487,18 @@ def run_index(eng, ctx: JobContext, epoch: int, embed: EmbedProvider, should_abo
                      "text": seg[3]},
                 )
 
-    # 全部完成:原子切换检索版本(指针 + is_active 翻转同事务)
+    # 全部完成:原子切换检索版本(指针 + is_active 翻转同事务)。
+    # 翻转范围 = 本录音的旧版本 chunk(P2 修复:原为 meeting 级,同会谈
+    # 多录音时会误踢其他录音已发布的索引)
     with leased_transaction(eng, ctx.job_id, epoch) as conn:
         conn.execute(
             text(
                 "UPDATE embedding_chunk SET is_active = false"
-                " WHERE meeting_id = :mid AND is_active = true AND version_id != :vid"
+                " WHERE is_active = true AND version_id != :vid"
+                " AND version_id IN (SELECT id FROM transcript_version"
+                "                    WHERE recording_id = :rid)"
             ),
-            {"mid": ctx.meeting_id, "vid": version_id},
+            {"vid": version_id, "rid": ctx.recording_id},
         )
         conn.execute(
             text("UPDATE embedding_chunk SET is_active = true WHERE version_id = :vid"),
@@ -506,28 +525,50 @@ def _chunks_for_version(eng, version_id: int):
         ).fetchall()
 
 
-def _record_model_run(eng, ctx: JobContext, *, stage, provider, model_name,
-                      input_hash, output_ref=None, prompt_version=None,
-                      is_mock=True) -> int:
-    """记录模型调用(调用已发生,属事实记录,不做租约守卫)。"""
+def _begin_model_run(eng, ctx: JobContext, *, stage, provider, model_name,
+                     input_hash, prompt_version=None, is_mock=True) -> int:
+    """调用前置记录:status=unknown(调用即将发出,结果未知)。
+
+    进程死于此后的任意时刻,该行即为"结果未知的调用"审计证据——
+    重发是允许的(不宣称避免重复调用/计费),unknown 行如实留痕。
+    幂等键为服务商请求级去重键,同键可多行(每次物理调用一行)。
+    """
     with eng.begin() as conn:
         return conn.execute(
             text(
                 "INSERT INTO model_run"
                 " (org_id, job_id, stage, provider, model_name, prompt_version,"
-                "  input_hash, status, output_ref, is_mock, idempotency_key,"
-                "  idempotency_key_sent)"
+                "  input_hash, status, is_mock, idempotency_key, idempotency_key_sent)"
                 " VALUES (:org, :job, :stage, :provider, :model, :pv, :ih,"
-                "  'succeeded', CAST(:out AS jsonb), :mock, :idem, false)"
+                "  'unknown', :mock, :idem, false)"
                 " RETURNING id"
             ),
             {
                 "org": ctx.org_id, "job": ctx.job_id, "stage": stage,
                 "provider": provider, "model": model_name, "pv": prompt_version,
-                "ih": input_hash, "out": _to_json(output_ref),
-                "mock": is_mock,
-                # 稳定幂等键:机构+逻辑任务+阶段+输入哈希,不含 attempt;
-                # 重试复用同键(设计约定);mock 服务无幂等语义,键仅记录
+                "ih": input_hash, "mock": is_mock,
                 "idem": f"org{ctx.org_id}-job{ctx.job_id}-{stage}-{input_hash}",
             },
         ).scalar()
+
+
+def _finish_model_run(eng, run_id: int, output_ref) -> None:
+    """调用成功:unknown → succeeded,写回输出(独立短事务)。"""
+    with eng.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE model_run SET status = 'succeeded',"
+                " output_ref = CAST(:out AS jsonb) WHERE id = :id"
+            ),
+            {"out": _to_json(output_ref), "id": run_id},
+        )
+
+
+def _fail_model_run(eng, run_id: int) -> None:
+    """调用明确失败(Provider 抛异常,结果确定):unknown → failed。
+    区别于 unknown(进程死亡,结果未知)。"""
+    with eng.begin() as conn:
+        conn.execute(
+            text("UPDATE model_run SET status = 'failed' WHERE id = :id"),
+            {"id": run_id},
+        )

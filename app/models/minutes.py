@@ -54,13 +54,20 @@ class MinutesVersion(Base):
 
 
 class QueryLog(Base):
-    """问答审计:问题、检索候选、回答与引用,含 mock 标识。"""
+    """问答审计:问题、检索候选、回答与引用,含 mock 标识。
+
+    计数口径约定(P2):retrieved_chunk_ids 为阈值前原始检索候选(完整
+    检索行为),relevant_candidate_count 为过相关性阈值的候选数(真正
+    进入回答流程的证据候选),两者分离,避免数量与 ID 列表口径混淆。
+    """
+
     __tablename__ = "query_log"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), index=True)
     question: Mapped[str] = mapped_column(Text)
     retrieved_chunk_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    relevant_candidate_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     answer: Mapped[str | None] = mapped_column(Text, nullable=True)
     cited_segment_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     has_sufficient_evidence: Mapped[bool | None] = mapped_column(nullable=True)

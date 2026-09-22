@@ -26,11 +26,15 @@ class AnswerOut(BaseModel):
     """问答结果。
 
     has_sufficient_evidence 为 mock 启发式判断(相关性阈值 + 焦点线索规则,
-    见 docs/DECISIONS.md D-24),不宣称完成真实充分性校验。
+    见 docs/DECISIONS.md D-25),不宣称完成真实充分性校验。
     false 时 answer 为 None 且无引用——无论原因是候选全低于相关性阈值、
     无可用索引,还是候选相关但问题询问的日期/负责人/时长线索缺失,
-    均明确返回证据不足,不拼接候选冒充答案。retrieved_count>0 且 false
-    可区分"相关但不足以回答"与"完全不相关/无索引"(后者为 0)。
+    均明确返回证据不足,不拼接候选冒充答案。
+
+    计数口径约定(与 query_log 一致):
+    - raw_retrieved_count:阈值前原始检索候选数(检索了什么);
+    - relevant_candidate_count:过相关性阈值的候选数(可作证据的候选)。
+    两者分离,避免数量与 ID 列表口径混淆。
     """
 
     meeting_id: int
@@ -38,6 +42,6 @@ class AnswerOut(BaseModel):
     answer: str | None
     has_sufficient_evidence: bool
     is_mock: bool
-    # 过相关性阈值的候选数(query_log.retrieved_chunk_ids 另记阈值前检索候选)
-    retrieved_count: int
+    raw_retrieved_count: int
+    relevant_candidate_count: int
     citations: list[CitationOut]

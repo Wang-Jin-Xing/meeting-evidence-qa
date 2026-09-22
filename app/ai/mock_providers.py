@@ -10,6 +10,9 @@
   MEET_MOCK_ASR_FAIL_ON_CALL=N 全局第 N 次调用失败一次
   MEET_MOCK_LLM_FAIL_ON_CALL=N / MEET_MOCK_EMBED_FAIL_ON_CALL=N 同上
   MEET_MOCK_ASR_DELAY_MS=N     每次调用延迟 N 毫秒
+  MEET_MOCK_KILL_AFTER_CALL=N  全局第 N 次任意 Provider 调用返回后
+                               os._exit(70) 立即自杀(模拟进程死于
+                               "模型已响应、结果未提交"窗口,恢复测试用)
 """
 import hashlib
 import math
@@ -74,6 +77,20 @@ def _fail_on_call(key: str) -> bool:
     return str(n) in [x.strip() for x in v.split(",")]
 
 
+def _kill_after_call() -> None:
+    """全局第 N 次任意 Provider 调用返回后立即自杀(不经任何清理/提交)。
+
+    模拟进程死于"模型已响应、结果未提交"窗口:P2 恢复测试专用。
+    计数与 FAIL_ON_CALL 各自独立。
+    """
+    v = os.environ.get("MEET_MOCK_KILL_AFTER_CALL")
+    if v is None:
+        return
+    n = _counter.next("KILL")
+    if str(n) == v.strip():
+        os._exit(70)
+
+
 class MockASR(ASRProvider):
     name = "mock-asr"
     model_name = "mock-asr-v1"
@@ -88,6 +105,7 @@ class MockASR(ASRProvider):
         if _fail_on_call("ASR"):
             raise RuntimeError("[mock] 注入: ASR 调用失败(第N次)")
         speaker, text = CORPUS[slice_index % len(CORPUS)]
+        _kill_after_call()
         return ASRSlice(speaker=speaker, text=text, is_mock=True)
 
 
@@ -144,6 +162,7 @@ class MockLLM(LLMProvider):
                         needs_confirmation=True,
                     )
                 )
+        _kill_after_call()
         return MinutesDraft(items=items, is_mock=True)
 
     def answer_question(self, question: str, candidates: list[QACandidate]) -> QAAnswer:
@@ -160,6 +179,7 @@ class MockLLM(LLMProvider):
             return QAAnswer(text=None, cited_segment_ids=[], is_mock=True)
         parts = [f"{c.speaker or '未知发言者'}:{c.text}" for c in candidates]
         text = "根据会谈转写记录:" + ";".join(parts)
+        _kill_after_call()
         return QAAnswer(
             text=text,
             cited_segment_ids=[c.segment_id for c in candidates],
@@ -210,7 +230,9 @@ class MockEmbed(EmbedProvider):
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         if _fail_on_call("EMBED"):
             raise RuntimeError("[mock] 注入: Embed 调用失败(第N次)")
-        return [self._embed_one(t) for t in texts]
+        vectors = [self._embed_one(t) for t in texts]
+        _kill_after_call()
+        return vectors
 
     @staticmethod
     def _embed_one(text: str) -> list[float]:

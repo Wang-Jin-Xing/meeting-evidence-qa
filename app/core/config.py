@@ -1,6 +1,7 @@
 """应用配置:仅从环境变量 / .env 读取,密钥不写入代码。"""
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,10 +28,28 @@ class Settings(BaseSettings):
     storage_dir: str = "storage"
     max_upload_mb: int = 200
 
-    # worker 行为(测试通过环境变量覆盖)
-    worker_poll_seconds: float = 1.0
-    worker_lease_ttl_seconds: int = 120
-    worker_max_attempts: int = 3
+    # worker 行为(测试通过环境变量覆盖)。
+    # 修复 P1.2 遗留:worker_* 字段此前无 MEET_ 前缀别名,测试注入的
+    # MEET_WORKER_* 环境变量从未生效(碰巧无测试依赖);现显式支持
+    # 两种变量名,与 mock 故障注入(MEET_MOCK_*)的命名风格统一。
+    worker_poll_seconds: float = Field(
+        default=1.0,
+        validation_alias=AliasChoices(
+            "worker_poll_seconds", "MEET_WORKER_POLL_SECONDS"
+        ),
+    )
+    worker_lease_ttl_seconds: int = Field(
+        default=120,
+        validation_alias=AliasChoices(
+            "worker_lease_ttl_seconds", "MEET_WORKER_LEASE_TTL_SECONDS"
+        ),
+    )
+    worker_max_attempts: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "worker_max_attempts", "MEET_WORKER_MAX_ATTEMPTS"
+        ),
+    )
     # 音频切片时长(秒):切片边界即片段级时间信息来源
     slice_seconds: int = 10
 
