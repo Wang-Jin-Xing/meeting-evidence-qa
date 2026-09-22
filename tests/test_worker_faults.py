@@ -22,19 +22,8 @@ from tests.test_worker_e2e import q, start_worker, wait_job_status
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-
-@pytest.fixture(autouse=True)
-def _no_stale_pending_jobs():
-    """测试开始前清理遗留 queued/running 任务(防注入错位,见 test_recovery)。"""
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                "UPDATE processing_job SET status = 'failed',"
-                " last_error = '测试间清理:残留任务置终态'"
-                " WHERE status IN ('queued', 'running')"
-            )
-        )
-    yield
+# 残留任务防护由 conftest 的 no_stale_pending_jobs(autouse,全局)提供,
+# 不再在本模块重复定义,以便任意执行顺序下行为一致。
 
 
 def upload(client, session, org, user, seconds: float = 25):

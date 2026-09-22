@@ -10,6 +10,9 @@ class Settings(BaseSettings):
 
     # 数据库(仅 PostgreSQL,无 SQLite 降级)
     database_url: str = "postgresql+psycopg://mes:mes_dev_only@localhost:5432/meeting_evidence"
+    # 独立测试库:仅供 tests/db_guard.py 使用,应用运行时不读取。
+    # 无默认值 = 必须显式配置,测试据此拒绝在应用库上执行 TRUNCATE。
+    test_database_url: str | None = None
 
     # API 服务
     app_host: str = "127.0.0.1"

@@ -1,6 +1,9 @@
-"""集成测试夹具:直连本地 PostgreSQL(真实库,mock 仅替换模型服务)。
+"""集成测试夹具:连接独立测试 PostgreSQL(仅模型服务为 mock)。
 
-会话开始前 TRUNCATE 全部业务表保证可重复执行(本地开发库专用,决策 D-06)。
+会话开始前 TRUNCATE 全部业务表保证可重复执行。
+决策 D-06(修订):TRUNCATE 只允许发生在独立测试库上——tests/db_guard.py
+要求显式 TEST_DATABASE_URL 并以 current_database() 复核,校验不通过则
+整个会话立即退出,不执行任何清表动作。
 """
 import io
 import itertools
@@ -8,15 +11,24 @@ import wave
 from datetime import datetime, timezone
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.core.db import SessionLocal, engine
-from app.core.security import hash_password
-from app.main import app
-from app.models.enums import MeetingVisibility, UserRole
-from app.models.meeting import Meeting
-from app.models.org import MeetingAccess, Organization, User
+# 必须先于 app.core.db 导入:engine 在该模块导入时按当时配置创建
+from tests.db_guard import TestDatabaseConfigError, setup_test_database
+
+try:
+    TEST_DB = setup_test_database()
+except TestDatabaseConfigError as e:
+    pytest.exit(reason=f"测试库隔离校验未通过:\n{e}", returncode=1)
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.core.db import SessionLocal, engine  # noqa: E402
+from app.core.security import hash_password  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models.enums import MeetingVisibility, UserRole  # noqa: E402
+from app.models.meeting import Meeting  # noqa: E402
+from app.models.org import MeetingAccess, Organization, User  # noqa: E402
 
 ALL_TABLES = [
     "query_log", "embedding_chunk", "segment_mapping", "transcript_segment",
@@ -32,12 +44,43 @@ def _uniq(prefix: str) -> str:
     return f"{prefix}-{next(_counter)}"
 
 
+def assert_isolated_database() -> str:
+    """清表前置守卫:实际连接的库必须是守卫已核实的测试库。"""
+    with engine.connect() as conn:
+        actual = conn.execute(text("SELECT current_database()")).scalar()
+    if actual != TEST_DB:
+        pytest.exit(
+            reason=f"拒绝清表:当前连接库 {actual!r} != 已核实测试库 {TEST_DB!r}"
+        )
+    return actual
+
+
 @pytest.fixture(scope="session", autouse=True)
 def clean_database():
     # user 是 PG 保留字,手写 SQL 需引号(ORM 自动处理)
+    assert_isolated_database()
     quoted = ", ".join(f'"{t}"' for t in ALL_TABLES)
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {quoted} RESTART IDENTITY CASCADE"))
+
+
+@pytest.fixture(autouse=True)
+def no_stale_pending_jobs():
+    """每个测试前把遗留 queued/running 任务置终态(全局,消除跨模块顺序依赖)。
+
+    防护:恢复/故障类测试中断后会留下可领取任务,后续测试模块的 worker
+    按 created_at 抢走最老残留,导致故障注入错位。放在 conftest 而非各模块,
+    使任意执行顺序(含单文件运行)下行为一致。succeeded/failed 不在领取候选内。
+    """
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE processing_job SET status = 'failed',"
+                " last_error = '测试间清理:残留任务置终态'"
+                " WHERE status IN ('queued', 'running')"
+            )
+        )
+    yield
 
 
 @pytest.fixture

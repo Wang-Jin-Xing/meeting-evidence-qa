@@ -29,13 +29,17 @@ docker inspect --format '{{.State.Health.Status}}' mes-pg   # 应输出 healthy
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
-# 3. 配置(可选,默认值即可本地运行;真实密钥只放 .env,已被 .gitignore 排除)
+# 3. 配置(必须项:测试库;其余默认值即可本地运行,真实密钥只放 .env,已被 .gitignore 排除)
 Copy-Item .env.example .env
+#    编辑 .env,确认 TEST_DATABASE_URL 指向独立测试库(库名不得与 DATABASE_URL 相同)。
+#    未配置 TEST_DATABASE_URL 时 pytest 直接退出,不会清空任何数据库。
 
-# 4. 数据库迁移
+# 4. 数据库迁移(应用库)
 .\.venv\Scripts\python.exe -m alembic upgrade head
 
-# 5. 冒烟测试(含真实连接 PG 的集成测试)
+# 5. 冒烟测试(真实连接 PostgreSQL 的集成测试)
+#    测试自行完成:建测试库(若不存在)→ 迁移测试库 → 校验 current_database()
+#    → 仅对测试库 TRUNCATE;worker 子进程继承同一测试库连接。
 .\.venv\Scripts\python.exe -m pytest -v
 
 # 6. 启动 API
@@ -133,3 +137,6 @@ P2 收尾(已完成并验证,见 docs/DECISIONS.md D-33~D-37):
 3. **alembic.ini 必须保持 ASCII**:alembic 以 locale 编码(GBK)读取该文件,
    中文注释会导致 UnicodeDecodeError;中文说明写在 env.py / 迁移文件中。
 4. Windows 控制台运行 Python 工具链时如遇编码问题,先执行 `$env:PYTHONUTF8=1`。
+5. **测试库与应用库分离**:`TEST_DATABASE_URL` 必填,测试启动时会以
+   `current_database()` 复核并拒绝在与应用库同名的库上运行(见 D-39)。
+   应用库(`meeting_evidence`)不再被测试清表,其中历史测试数据需自行清理。

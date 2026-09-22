@@ -2,6 +2,23 @@
 
 按时间倒序追加。每条注明状态:设计/已实现/部分实现。
 
+## 工程约束:测试库隔离(2026-09-23)
+
+- **D-39(修订 D-06)测试必须运行在独立测试库,清表前先核实实际库名**:
+  原 D-06 让集成测试直连本地开发库并在 session 开始 TRUNCATE 全部业务表——
+  一旦开发库里有真实数据或他人正在使用,该约定就是破坏性操作。现改为:
+  ① `TEST_DATABASE_URL` 必须显式配置(env 或 .env),**缺失即整场退出,不执行
+  任何 TRUNCATE**(不从 `database_url` 推导或回退);② 与应用库的
+  (host, port, database) 三元组相同、或库名相同(即便主机不同)一律拒绝;
+  ③ 不信任 URL 字符串,连接后以 `current_database()` 复核,并校验编码为 UTF8;
+  ④ 测试库不存在则自动建库,迁移只应用到测试库;⑤ 守卫在 conftest 顶部、
+  `app.core.db` 导入之前执行——engine 在该模块导入时按当时配置创建,顺序错了
+  就会连到应用库;⑥ worker 子进程经继承的 `DATABASE_URL` 走同一测试库,并由
+  `test_worker_subprocess_inherits_test_database` 实证(否则故障注入会写脏真实库)。
+  配套:`no_stale_pending_jobs` 由 conftest autouse 全局提供(原在两个测试模块
+  各自定义),并移除依赖未安装的 pytest-order 的 `@pytest.mark.order` 标记,
+  使单文件运行与任意执行顺序结果一致。已实现。
+
 ## P2 收尾(2026-09-23)
 
 - **D-33 Provider 入口调用记录(命名口径纠偏)**:新增 `MEET_MOCK_REQUEST_LOG`
@@ -77,7 +94,7 @@
 - **D-03 向量维度固定 1024**:迁移时定死;真实 Provider 若维度不同需要新迁移(记录于迁移文件)。已实现。
 - **D-04 枚举用非原生 VARCHAR+CHECK(native_enum=False)**:避免 PG 原生枚举改值的迁移成本。已实现。
 - **D-05 密码哈希用 stdlib scrypt,JWT 用 PyJWT/HS256**:无 bcrypt Windows 兼容问题;密钥走环境变量。已实现。
-- **D-06 集成测试直连本地 PG,session 开始时 TRUNCATE 业务表**:测试库与开发库共用(本地专用),保证可重复执行。已实现。
+- **D-06 集成测试直连本地 PG,session 开始时 TRUNCATE 业务表**:测试库与开发库共用(本地专用),保证可重复执行。**已被 D-39 修订**:不再共用,TRUNCATE 只允许发生在显式配置的独立测试库上。
 - **D-07 上传仅做扩展名白名单校验,内容校验留给 P1.2 prepare 阶段**:上传路径不做格式解析,保持轻量。已实现。
 - **D-08 重复提交 = 同 meeting + 同 SHA-256 → 409 返回已有 recording/job**:不创建重复逻辑任务。已实现。
 - **D-09 上传权限 = 对该会谈有访问权的任意用户**:不区分角色,操作审计由 created_by 记录。已实现。

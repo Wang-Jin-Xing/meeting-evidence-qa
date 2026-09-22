@@ -31,24 +31,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # ---------- 公共辅助 ----------
 
-@pytest.fixture(autouse=True)
-def _no_stale_pending_jobs():
-    """测试开始前把库中遗留的 queued/running 任务置为终态 failed。
-
-    防护:恢复类测试失败后可能留下可领取的任务,被后续测试的 worker
-    抢走会导致故障注入错位(claim 按 created_at 取最老)。succeeded/failed
-    不在领取候选内,qa_world 等已完成数据不受影响。
-    """
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                "UPDATE processing_job SET status = 'failed',"
-                " last_error = '测试间清理:残留任务置终态'"
-                " WHERE status IN ('queued', 'running')"
-            )
-        )
-    yield
-
+# 残留任务防护(conftest 的 no_stale_pending_jobs,autouse 全局生效):
+# 恢复类测试失败后可能留下可领取任务,被后续 worker 抢走会导致故障注入
+# 错位(claim 按 created_at 取最老)。
 
 
 def wait_for(cond, timeout: float = 30, msg: str = "条件等待超时"):
