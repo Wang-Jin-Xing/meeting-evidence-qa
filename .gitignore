@@ -32,3 +32,6 @@ frontend/dist/
 # IDE
 .idea/
 .vscode/
+
+# 交接包(Git bundle,仓库自身不能包含自己)
+handoff/

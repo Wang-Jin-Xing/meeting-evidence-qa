@@ -1,0 +1,38 @@
+[seed] 目标数据库: meeting_evidence
+[seed] 业务表已清空(--reset)
+[seed] case_normal: 录音已受理 job=1
+[seed] case_normal: 转写来源=human_transcription 片段=12 纪要条目=9 索引=12块
+[seed]   生效模型: ASR=mock-asr-v1(mock=True) LLM=deepseek-chat(mock=False) Embed=mock-embed-bigram-v1(mock=True)
+[ask] 注册证什么时候补齐?
+      答: X200的注册证和检测报告将在5月20日之前补齐。
+      引用: SEG-2@10s (is_mock=False)
+[ask] 培训由谁负责?
+      答: 培训由厂商负责，共3天，讲师名单7天内确定。
+      引用: SEG-6@50s (is_mock=False)
+[ask] 第一批设备什么时候送到?
+      答: 第一批6台于5月10日送到。
+      引用: SEG-4@30s (is_mock=False)
+[ask] 明年的科研经费预算是多少?
+      → 证据不足,未生成回答 (候选=0, is_mock=False)
+[seed] case_boundary: 录音已受理 job=2
+[seed] case_boundary: 转写来源=human_transcription 片段=12 纪要条目=7 索引=12块
+[seed]   生效模型: ASR=mock-asr-v1(mock=True) LLM=deepseek-chat(mock=False) Embed=mock-embed-bigram-v1(mock=True)
+[ask] Y300的报价是多少?
+      答: 候选片段明确说明Y300没有报价，因此无法提供其报价。
+      引用: SEG-16@30s (is_mock=False)
+[ask] Y500的注册证什么时候补齐?
+      → 证据不足,未生成回答 (候选=4, is_mock=False)
+[ask] 报修后多久上门?
+      答: 厂商表示报修后尽快上门，具体时限需回去确认后答复。
+      引用: SEG-20@70s (is_mock=False)
+[ask] Y300可以折价回收吗?
+      答: Y300不支持折价回收，只能按废品处理。
+      引用: SEG-22@90s (is_mock=False)
+[权限] 跨机构:详情 404 / 提问 404(期望均 404;无权与不存在不区分)
+[权限] 同机构非白名单(restricted):详情 404 / 提问 404(期望均 404;无权与不存在不区分)
+
+[seed] 演示账号(密码见 DEMO_PASSWORD 环境变量或脚本默认值):
+  demo_admin_a(管理员) / demo_staff_a(普通用户)
+  demo_admin_c(管理员) / demo_staff_c(普通用户)
+  demo_outsider(外部机构,用于越权演示)
+[seed] 会谈 id: [1, 2]

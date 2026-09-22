@@ -130,5 +130,38 @@ $env:LLM_PROVIDER="deepseek"; .\.venv\Scripts\python.exe demo/seed_demo.py --res
 | 密钥 | 只在 `.env` / 环境变量,**不进 Git**(`.env.example` 是模板) |
 
 恢复演示数据(不依赖导出文件):直接跑 `demo/seed_demo.py --reset`。
-需要精确复现当时状态时:还原 `demo/db_export/*.sql` + 把 `storage/uploads/`
-放回原位(路径记在 `recording.file_path`)。
+需要精确复现当时状态时:
+
+```powershell
+docker exec mes-pg psql -U mes -d postgres -c "CREATE DATABASE meeting_evidence_restore OWNER mes"
+docker exec -i mes-pg psql -U mes -d meeting_evidence_restore -q < demo/db_export/meeting_evidence_demo.sql
+```
+
+导出已实测可还原(2 会谈 / 2 录音 / 2 转写版本 / 24 向量块 / 2 纪要版本 /
+19 条模型调用记录,中文与向量均完整);`recording.file_path` 指向的原始音频
+在 `storage/uploads/`,需与导出配套放回。
+
+## 9. 实测评测记录(2026-09-23,可复跑)
+
+`eval/reports_sample/` 三份报告(同一 dev/test 数据集,各 6 题 + 权限探针):
+
+| 组合 | 无答案题正确拒答 | 无答案误报 | 证据命中 | 回答命中 | 平均时延 | 权限探针 |
+|---|---|---|---|---|---|---|
+| mock LLM + mock 检索 | dev 0.5 / test 0.5 | 各 1 例 | 1.0 | 1.0 | ~60ms | 5/5 |
+| **DeepSeek LLM** + mock 检索 | dev 1.0 / test 1.0 | 0 例 | dev 0.75 / test 1.0 | dev 0.75 / test 1.0 | 650–830ms | 5/5 |
+
+能说的:真实 LLM 消除了 mock 的两例型号错配/日期归属误报(见 `dev_neg_model_mismatch`
+由 false_positive=1 → 0),代价是时延上升一个量级。
+**不能说的**:检索质量结论——Embedding 仍是 mock bigram,`evidence_hit` 只反映
+字面重叠检索是否把金标片段捞上来。
+
+两处测量口径局限(不是模型缺陷,别误读):
+1. `answer_hit` 按金标线索**字面包含**判定;真实模型改写成"两年"而非"2年"
+   会被记未命中(dev_q2 即此例,故 dev 出现 0.75)。
+2. 真实 LLM 输出非严格确定(同一输入两次跑,纪要条目数 9 与 11 都出现过);
+   受层1校验约束,结构合法性稳定,条目粒度不稳定。评测数字要跨次比较时
+   必须固定 prompt_version 并看区间,不看单次。
+
+费用口径:真实调用若未配单价表(`LLM_PRICE_PER_1K_IN/OUT`),`cost_basis=unknown`
+且 `cost_estimate` 为 NULL,报告里体现为 `unpriced_real_calls=15` ——
+这是"不知道花没花钱",不是"没花钱";该机构一旦设置预算即被视为不可核算而停止调用。

@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import io
 import json
+import math
 import os
 import subprocess
 import sys
@@ -338,7 +339,11 @@ def summarize(rows: list[dict]) -> dict:
         ),
         "latency_ms": {
             "avg": round(sum(lat) / total, 1) if total else None,
-            "p95": lat[int(total * 0.95) - 1] if total else None,
+            # n 很小时 p95 实际就是最大值,故同时给出 max 与样本量,避免误读
+            "p95": lat[min(total - 1, max(0, math.ceil(total * 0.95) - 1))]
+            if total else None,
+            "max": lat[-1] if total else None,
+            "n": total,
         },
         "by_category": {
             cat: _summarize_group(group)
