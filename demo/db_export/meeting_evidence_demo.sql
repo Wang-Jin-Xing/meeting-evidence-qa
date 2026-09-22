@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict VJjbqzix8vTZRVBakyNujyrfudV9QwL9wdYtLcFhCQP31f8binGMeT8OIPJfG7G
+\restrict d5tu9LlpttIbf03albtOChn8Xqe2U9V1zne8KSTaXJwcK777WNGQBmbVjpkkg3F
 
 -- Dumped from database version 16.15 (Debian 16.15-1.pgdg12+2)
 -- Dumped by pg_dump version 16.15 (Debian 16.15-1.pgdg12+2)
@@ -752,14 +752,14 @@ COPY public.embedding_chunk (id, segment_id, version_id, org_id, meeting_id, is_
 --
 
 COPY public.job_stage (id, job_id, stage_name, status, attempt_count, started_at, finished_at, error, artifact_ref) FROM stdin;
-2	1	transcribe	pending	0	\N	\N	\N	\N
-3	1	minutes	pending	0	\N	\N	\N	\N
-4	1	index	pending	0	\N	\N	\N	\N
 1	1	prepare	succeeded	0	\N	2026-09-22 22:03:31.210553	\N	{"duration_ms": 120000, "slice_seconds": 10, "slice_count": 12}
-6	2	transcribe	pending	0	\N	\N	\N	\N
-7	2	minutes	pending	0	\N	\N	\N	\N
-8	2	index	pending	0	\N	\N	\N	\N
 5	2	prepare	succeeded	0	\N	2026-09-22 22:03:36.509703	\N	{"duration_ms": 120000, "slice_seconds": 10, "slice_count": 12}
+2	1	transcribe	succeeded	0	2026-09-22 22:08:31.569802	\N	\N	\N
+3	1	minutes	succeeded	0	\N	2026-09-22 22:08:34.497678	\N	\N
+4	1	index	succeeded	0	2026-09-22 22:08:34.511185	\N	\N	\N
+6	2	transcribe	succeeded	0	2026-09-22 22:08:36.569598	\N	\N	\N
+7	2	minutes	succeeded	0	\N	2026-09-22 22:08:38.538619	\N	\N
+8	2	index	succeeded	0	2026-09-22 22:08:38.554947	\N	\N	\N
 \.
 
 
@@ -788,6 +788,8 @@ COPY public.meeting_access (id, user_id, meeting_id) FROM stdin;
 COPY public.minutes_version (id, meeting_id, job_id, version_no, source_type, parent_version_id, status, content, prompt_version, model_run_id, created_by, created_at) FROM stdin;
 1	1	\N	1	ai_draft	\N	pending_review	{"items": [{"text": "采购X200监护仪12台，合同本周内签署", "type": "decision", "owner": null, "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [3]}, {"text": "第一批6台5月10日送到，第二批6台5月30日前完成", "type": "decision", "owner": null, "due_date": "5月30日", "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [4]}, {"text": "厂商5月20日前补齐X200注册证和检测报告", "type": "decision", "owner": "李经理", "due_date": "5月20日", "certainty": "decided", "needs_confirmation": false, "evidence_segment_ids": [2]}, {"text": "培训共3天由厂商负责，讲师名单7天内确定", "type": "decision", "owner": "李经理", "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [6]}, {"text": "培训对接人定为张护士长，日期由厂商提前一周通知", "type": "decision", "owner": "张护士长", "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [7]}, {"text": "耗材价格清单5月15日前提供", "type": "decision", "owner": "李经理", "due_date": "5月15日", "certainty": "decided", "needs_confirmation": false, "evidence_segment_ids": [8]}, {"text": "售后报修后2天内上门，整机保修2年，写入合同", "type": "decision", "owner": null, "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [9, 10]}, {"text": "付款分两期，验收合格后付尾款", "type": "decision", "owner": null, "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [11]}, {"text": "发票在验收后7天内开具", "type": "decision", "owner": "李经理", "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [12]}]}	deepseek-meetings-v1	1	\N	2026-09-22 22:03:33.688175
 2	2	\N	1	ai_draft	\N	pending_review	{"items": [{"text": "讨论Y500超声设备采购意向和旧设备处理", "type": "topic", "owner": null, "due_date": null, "certainty": "discussed", "needs_confirmation": false, "evidence_segment_ids": [13]}, {"text": "Y500标准配置报价每台120万元", "type": "discussion", "owner": null, "due_date": null, "certainty": "discussed", "needs_confirmation": false, "evidence_segment_ids": [14]}, {"text": "Y300本次未报价", "type": "discussion", "owner": null, "due_date": null, "certainty": "discussed", "needs_confirmation": false, "evidence_segment_ids": [15, 16]}, {"text": "Y500注册证正在准备，时间未定", "type": "discussion", "owner": null, "due_date": null, "certainty": "discussed", "needs_confirmation": false, "evidence_segment_ids": [17, 18]}, {"text": "售后上门时限待厂商确认后答复", "type": "discussion", "owner": null, "due_date": null, "certainty": "discussed", "needs_confirmation": false, "evidence_segment_ids": [19, 20]}, {"text": "Y300不支持折价回收，只能按废品处理", "type": "decision", "owner": null, "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [21, 22]}, {"text": "交付时间和培训安排待合同签署后确定", "type": "discussion", "owner": null, "due_date": null, "certainty": "discussed", "needs_confirmation": false, "evidence_segment_ids": [23, 24]}]}	deepseek-meetings-v1	10	\N	2026-09-22 22:03:38.580383
+3	1	1	2	ai_draft	\N	pending_review	{"items": [{"text": "采购X200监护仪12台，合同本周内签署", "type": "decision", "owner": null, "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [3]}, {"text": "第一批6台5月10日送到，第二批6台5月30日前完成", "type": "decision", "owner": null, "due_date": "5月30日", "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [4]}, {"text": "厂商5月20日前补齐X200注册证和检测报告", "type": "decision", "owner": "李经理(厂商)", "due_date": "5月20日", "certainty": "decided", "needs_confirmation": false, "evidence_segment_ids": [2]}, {"text": "培训共3天由厂商负责，讲师名单7天内确定", "type": "decision", "owner": "李经理(厂商)", "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [6]}, {"text": "培训对接人定为张护士长，日期由厂商提前一周通知", "type": "decision", "owner": "张护士长(机构)", "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [7]}, {"text": "厂商5月15日前提供耗材价格清单", "type": "decision", "owner": "李经理(厂商)", "due_date": "5月15日", "certainty": "decided", "needs_confirmation": false, "evidence_segment_ids": [8]}, {"text": "售后报修后2天内上门，整机保修2年", "type": "decision", "owner": "李经理(厂商)", "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [10]}, {"text": "付款分两期，验收合格后付尾款", "type": "decision", "owner": null, "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [11]}, {"text": "发票在验收后7天内开具", "type": "decision", "owner": "李经理(厂商)", "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [12]}, {"text": "安排科室护士参加临床培训", "type": "todo", "owner": "张护士长(机构)", "due_date": null, "certainty": "discussed", "needs_confirmation": true, "evidence_segment_ids": [5]}, {"text": "售后响应时间需写进合同并明确", "type": "needs_confirmation", "owner": null, "due_date": null, "certainty": "suggested", "needs_confirmation": true, "evidence_segment_ids": [9]}]}	deepseek-meetings-v1	20	\N	2026-09-22 22:08:34.493593
+4	2	2	2	ai_draft	\N	pending_review	{"items": [{"text": "讨论Y500超声设备采购意向和旧设备处理", "type": "topic", "owner": null, "due_date": null, "certainty": "discussed", "needs_confirmation": false, "evidence_segment_ids": [13]}, {"text": "Y500标准配置报价每台120万元", "type": "discussion", "owner": null, "due_date": null, "certainty": "discussed", "needs_confirmation": false, "evidence_segment_ids": [14]}, {"text": "本次仅报Y500价格，Y300无报价", "type": "discussion", "owner": null, "due_date": null, "certainty": "discussed", "needs_confirmation": false, "evidence_segment_ids": [15, 16]}, {"text": "Y500注册证补齐时间未定", "type": "needs_confirmation", "owner": null, "due_date": null, "certainty": "suggested", "needs_confirmation": true, "evidence_segment_ids": [17, 18]}, {"text": "报修上门时限待厂商确认后答复", "type": "needs_confirmation", "owner": null, "due_date": null, "certainty": "suggested", "needs_confirmation": true, "evidence_segment_ids": [19, 20]}, {"text": "Y300不支持折价回收，只能按废品处理", "type": "decision", "owner": null, "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [21, 22]}, {"text": "交付时间和培训安排待合同签署后确定", "type": "needs_confirmation", "owner": null, "due_date": null, "certainty": "suggested", "needs_confirmation": true, "evidence_segment_ids": [23, 24]}]}	deepseek-meetings-v1	21	\N	2026-09-22 22:08:38.535081
 \.
 
 
@@ -815,6 +817,8 @@ COPY public.model_run (id, org_id, job_id, stage, provider, model_name, prompt_v
 15	3	\N	qa	deepseek	deepseek-chat	deepseek-meetings-v1	a996d8cdad784ff7cc47fd3e005edb4da5f065115841c200934128f97b018ef7	succeeded	{"text": null, "cited": []}	f	org3-jobNone-qa-a996d8cdad784ff7cc47fd3e005edb4da5f065115841c200934128f97b018ef7	f	\N	344	13	2026-09-22 22:03:39.593002	unknown
 18	3	\N	qa	mock-embed	mock-embed-bigram-v1	\N	b0954edc66635fe129f97dfb7ca02dc7040f794a913791bfba69ede68796a7d4	succeeded	\N	t	org3-jobNone-qa-b0954edc66635fe129f97dfb7ca02dc7040f794a913791bfba69ede68796a7d4	f	\N	\N	\N	2026-09-22 22:03:41.129862	unknown
 19	3	\N	qa	deepseek	deepseek-chat	deepseek-meetings-v1	a5218d33ca5c44da916ea29a2f28eb19fd3f0399c1ce3ff0aa35f7cd8b5b07a8	succeeded	{"text": "Y300不支持折价回收，只能按废品处理。", "cited": [22]}	f	org3-jobNone-qa-a5218d33ca5c44da916ea29a2f28eb19fd3f0399c1ce3ff0aa35f7cd8b5b07a8	f	\N	342	24	2026-09-22 22:03:41.168381	unknown
+20	1	1	minutes	deepseek	deepseek-chat	deepseek-meetings-v1	2b7e22d4cf72b63dde2ad99578d5b16b3e6801b58e02e10413b5b2b82f03ffa0	succeeded	{"items": [{"text": "采购X200监护仪12台，合同本周内签署", "type": "decision", "owner": null, "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [3]}, {"text": "第一批6台5月10日送到，第二批6台5月30日前完成", "type": "decision", "owner": null, "due_date": "5月30日", "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [4]}, {"text": "厂商5月20日前补齐X200注册证和检测报告", "type": "decision", "owner": "李经理(厂商)", "due_date": "5月20日", "certainty": "decided", "needs_confirmation": false, "evidence_segment_ids": [2]}, {"text": "培训共3天由厂商负责，讲师名单7天内确定", "type": "decision", "owner": "李经理(厂商)", "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [6]}, {"text": "培训对接人定为张护士长，日期由厂商提前一周通知", "type": "decision", "owner": "张护士长(机构)", "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [7]}, {"text": "厂商5月15日前提供耗材价格清单", "type": "decision", "owner": "李经理(厂商)", "due_date": "5月15日", "certainty": "decided", "needs_confirmation": false, "evidence_segment_ids": [8]}, {"text": "售后报修后2天内上门，整机保修2年", "type": "decision", "owner": "李经理(厂商)", "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [10]}, {"text": "付款分两期，验收合格后付尾款", "type": "decision", "owner": null, "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [11]}, {"text": "发票在验收后7天内开具", "type": "decision", "owner": "李经理(厂商)", "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [12]}, {"text": "安排科室护士参加临床培训", "type": "todo", "owner": "张护士长(机构)", "due_date": null, "certainty": "discussed", "needs_confirmation": true, "evidence_segment_ids": [5]}, {"text": "售后响应时间需写进合同并明确", "type": "needs_confirmation", "owner": null, "due_date": null, "certainty": "suggested", "needs_confirmation": true, "evidence_segment_ids": [9]}]}	f	org1-job1-minutes-2b7e22d4cf72b63dde2ad99578d5b16b3e6801b58e02e10413b5b2b82f03ffa0	f	\N	532	818	2026-09-22 22:08:31.58761	unknown
+21	3	2	minutes	deepseek	deepseek-chat	deepseek-meetings-v1	47a68580e2bca2d40b8b4ed46fe6660d8376419d8008fc9168a8de79496255b4	succeeded	{"items": [{"text": "讨论Y500超声设备采购意向和旧设备处理", "type": "topic", "owner": null, "due_date": null, "certainty": "discussed", "needs_confirmation": false, "evidence_segment_ids": [13]}, {"text": "Y500标准配置报价每台120万元", "type": "discussion", "owner": null, "due_date": null, "certainty": "discussed", "needs_confirmation": false, "evidence_segment_ids": [14]}, {"text": "本次仅报Y500价格，Y300无报价", "type": "discussion", "owner": null, "due_date": null, "certainty": "discussed", "needs_confirmation": false, "evidence_segment_ids": [15, 16]}, {"text": "Y500注册证补齐时间未定", "type": "needs_confirmation", "owner": null, "due_date": null, "certainty": "suggested", "needs_confirmation": true, "evidence_segment_ids": [17, 18]}, {"text": "报修上门时限待厂商确认后答复", "type": "needs_confirmation", "owner": null, "due_date": null, "certainty": "suggested", "needs_confirmation": true, "evidence_segment_ids": [19, 20]}, {"text": "Y300不支持折价回收，只能按废品处理", "type": "decision", "owner": null, "due_date": null, "certainty": "decided", "needs_confirmation": true, "evidence_segment_ids": [21, 22]}, {"text": "交付时间和培训安排待合同签署后确定", "type": "needs_confirmation", "owner": null, "due_date": null, "certainty": "suggested", "needs_confirmation": true, "evidence_segment_ids": [23, 24]}]}	f	org3-job2-minutes-47a68580e2bca2d40b8b4ed46fe6660d8376419d8008fc9168a8de79496255b4	f	\N	507	513	2026-09-22 22:08:36.592182	unknown
 \.
 
 
@@ -834,8 +838,8 @@ COPY public.organization (id, name, budget_cents, reserved_cents) FROM stdin;
 --
 
 COPY public.processing_job (id, recording_id, status, current_stage, lease_epoch, lease_expires_at, locked_by, attempt_count, last_error, created_at, updated_at, next_run_at) FROM stdin;
-1	1	running	prepare	1	2026-09-22 22:08:31.172234	594f09bc@741a	1	\N	2026-09-22 22:03:31.121879	2026-09-22 22:03:31.172239	\N
-2	2	running	prepare	1	2026-09-22 22:08:36.477921	19203cb4@7faf	1	\N	2026-09-22 22:03:36.44467	2026-09-22 22:03:36.477925	\N
+1	1	succeeded	\N	2	\N	f70514bb@7279	2	\N	2026-09-22 22:03:31.121879	2026-09-22 22:08:34.529773	\N
+2	2	succeeded	\N	2	\N	f70514bb@7279	2	\N	2026-09-22 22:03:36.44467	2026-09-22 22:08:38.564423	\N
 \.
 
 
@@ -992,14 +996,14 @@ SELECT pg_catalog.setval('public.meeting_id_seq', 2, true);
 -- Name: minutes_version_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.minutes_version_id_seq', 2, true);
+SELECT pg_catalog.setval('public.minutes_version_id_seq', 4, true);
 
 
 --
 -- Name: model_run_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.model_run_id_seq', 19, true);
+SELECT pg_catalog.setval('public.model_run_id_seq', 21, true);
 
 
 --
@@ -1649,5 +1653,5 @@ ALTER TABLE ONLY public."user"
 -- PostgreSQL database dump complete
 --
 
-\unrestrict VJjbqzix8vTZRVBakyNujyrfudV9QwL9wdYtLcFhCQP31f8binGMeT8OIPJfG7G
+\unrestrict d5tu9LlpttIbf03albtOChn8Xqe2U9V1zne8KSTaXJwcK777WNGQBmbVjpkkg3F
 
