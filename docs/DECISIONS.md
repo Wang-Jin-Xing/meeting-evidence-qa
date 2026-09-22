@@ -2,6 +2,28 @@
 
 按时间倒序追加。每条注明状态:设计/已实现/部分实现。
 
+## P3(2026-09-23,进行中)
+
+- **D-40 评测框架(初始,报告自描述)**:`eval/dataset.json` 以 `split_by=meeting`
+  按会谈划分 dev/test(冻结靠 `dataset_version` + 报告内 sha256),语料经
+  `MEET_MOCK_ASR_CORPUS_FILE` 注入 mock ASR(每句对应一个 10s 切片),
+  经真实子进程 worker 完成四阶段后逐问调 API 评分。
+  指标刻意分开:`evidence_hit_rate`(引用命中金标片段)/ `answer_hit_rate`
+  (回答含金标线索)/ `missed_rate`(有答案却判不足)/
+  `no_answer_correct_rate` 与 `false_positive_rate`(无答案题的拒答与误报),
+  并按类别汇总时把"可回答题"与"无答案题"分列(同名指标不得混算)。
+  **报告必须可自证身份**:`meta.git` 含 rev/branch/**dirty**/改动清单/
+  `content_fingerprint`(覆盖未提交内容与未跟踪文件),`meta.database` 记录实际
+  写入的库——只有 git_rev 时,一份跑了未提交代码的报告无法复现。
+  已实现。
+- **D-41 mock 基线的解释边界**:当前全部 Provider 为 mock,评测分数只证明
+  "数据链路与评分脚本正确",**不得**作为检索或事实判断效果的证据;
+  D-32 已知反例(型号错配→把 X200 的日期当 X300 的答案)在 mock 基线中
+  确实以 false_positive 形式出现,这正是待真实模型改进的测量对象。
+  调参纪律:`--top-k` / `--threshold` 一次只覆盖一个旋钮,且不得据 test 集反复调参。
+  **样本量边界**:dev/test 目前各 1 场会谈 / 6 题,只能作流程冒烟,
+  真实基线前必须扩充并冻结。已记录。
+
 ## 工程约束:测试库隔离(2026-09-23)
 
 - **D-39(修订 D-06)测试必须运行在独立测试库,清表前先核实实际库名**:

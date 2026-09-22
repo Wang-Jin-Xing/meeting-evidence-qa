@@ -18,6 +18,10 @@ htmlcov/
 # 运行时数据(不提交任何上传音频与产物)
 storage/
 
+# 评测运行产物(报告与临时语料,可随时由 eval/run_eval.py 重新生成)
+eval/reports/
+eval/.work/
+
 # 前端(Phase 1 创建)
 frontend/node_modules/
 frontend/dist/
