@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     storage_dir: str = "storage"
     max_upload_mb: int = 200
 
+    # worker 行为(测试通过环境变量覆盖)
+    worker_poll_seconds: float = 1.0
+    worker_lease_ttl_seconds: int = 120
+    worker_max_attempts: int = 3
+    # 音频切片时长(秒):切片边界即片段级时间信息来源
+    slice_seconds: int = 10
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -41,6 +41,12 @@ class StageStatus(str, Enum):
     failed = "failed"
 
 
+class SliceStatus(str, Enum):
+    pending = "pending"
+    succeeded = "succeeded"
+    failed = "failed"
+
+
 class TranscriptSourceType(str, Enum):
     asr = "asr"                        # 任务自动转写
     human_correction = "human_correction"  # 人工纠错(新版本)

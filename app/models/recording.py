@@ -21,7 +21,7 @@ from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
-from app.models.enums import JobStatus, StageName, StageStatus
+from app.models.enums import JobStatus, SliceStatus, StageName, StageStatus
 
 
 class Recording(Base):
@@ -104,3 +104,26 @@ class JobStage(Base):
     artifact_ref: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     job = relationship("ProcessingJob", back_populates="stages")
+
+
+class TranscribeSlice(Base):
+    """转写分片:进度以数据库为准(设计约定)。
+
+    - prepare 阶段按切片边界建行(pending);
+    - transcribe 逐片转写,成功片写回 output_ref 且可复用,失败重试只处理未成功片;
+    - 分片内容存 DB,不依赖共享文件追加与计数。
+    """
+    __tablename__ = "transcribe_slice"
+    __table_args__ = (UniqueConstraint("job_id", "slice_index"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("processing_job.id"), index=True)
+    slice_index: Mapped[int] = mapped_column(Integer)
+    start_ms: Mapped[int] = mapped_column(Integer)
+    end_ms: Mapped[int] = mapped_column(Integer)
+    status: Mapped[SliceStatus] = mapped_column(
+        Enum(SliceStatus, native_enum=False, length=20), default=SliceStatus.pending
+    )
+    input_hash: Mapped[str] = mapped_column(String(64))  # 切片字节+配置的哈希
+    output_ref: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {speaker,text}
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)

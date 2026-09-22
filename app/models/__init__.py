@@ -7,6 +7,7 @@ from app.models.enums import (
     MinutesSourceType,
     MinutesStatus,
     ModelRunStatus,
+    SliceStatus,
     StageName,
     StageStatus,
     TimestampPrecision,
@@ -17,7 +18,12 @@ from app.models.meeting import Meeting
 from app.models.minutes import MinutesVersion, QueryLog
 from app.models.model_run import ModelRun
 from app.models.org import MeetingAccess, Organization, User
-from app.models.recording import JobStage, ProcessingJob, Recording
+from app.models.recording import (
+    JobStage,
+    ProcessingJob,
+    Recording,
+    TranscribeSlice,
+)
 from app.models.transcript import (
     EMBEDDING_DIM,
     EmbeddingChunk,
@@ -32,7 +38,7 @@ __all__ = [
     "StageStatus", "TimestampPrecision", "TranscriptSourceType", "UserRole",
     "Meeting", "MinutesVersion", "QueryLog", "ModelRun",
     "MeetingAccess", "Organization", "User",
-    "JobStage", "ProcessingJob", "Recording",
+    "JobStage", "ProcessingJob", "Recording", "TranscribeSlice",
     "EMBEDDING_DIM", "EmbeddingChunk", "SegmentMapping",
     "TranscriptSegment", "TranscriptVersion",
 ]

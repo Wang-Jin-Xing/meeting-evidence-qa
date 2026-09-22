@@ -1,0 +1,187 @@
+"""mock Provider 实现:确定性输出,支持故障注入与延迟,仅用于链路测试。
+
+边界声明(设计约定):
+- mock ASR 按分片序号从预置语料顺序取句(语料即虚构会谈对话),
+  时间信息一律来自调用方传入的切片边界,ASR 不产生时间;
+- mock LLM 为关键词规则,不是语言理解;mock 向量为字符 bigram 哈希,
+  仅表达字面重叠,无语义泛化能力。所有指标只证明流程正确;
+- 故障注入通过环境变量控制(测试传给 worker 子进程):
+  MEET_MOCK_ASR_FAIL_SLICE=N   每次第 N 片转写都失败(持续)
+  MEET_MOCK_ASR_FAIL_ON_CALL=N 全局第 N 次调用失败一次
+  MEET_MOCK_LLM_FAIL_ON_CALL=N / MEET_MOCK_EMBED_FAIL_ON_CALL=N 同上
+  MEET_MOCK_ASR_DELAY_MS=N     每次调用延迟 N 毫秒
+"""
+import hashlib
+import math
+import os
+import threading
+import time
+
+from app.ai.providers import (
+    ASRProvider,
+    ASRSlice,
+    EmbedProvider,
+    LLMProvider,
+    MinutesDraft,
+    MinutesItemDraft,
+    SegmentForLLM,
+)
+from app.models.transcript import EMBEDDING_DIM
+
+# 虚构会谈语料(演示与测试共用,语料顺序即对话顺序)
+CORPUS = [
+    ("张主任(机构)", "今天主要讨论X200监护仪的采购和交付安排"),
+    ("李经理(厂商)", "X200的注册证和检测报告我们会在5月20日之前补齐"),
+    ("张主任(机构)", "X300型号的保修期是多久?和X200有区别吗"),
+    ("李经理(厂商)", "X200整机保修两年,X300保修三年"),
+    ("王护士长(机构)", "建议第一批设备5月10日先到货,第二批月底前完成"),
+    ("李经理(厂商)", "我们同意分两批交付,第一批5月10日送到"),
+    ("张主任(机构)", "安装培训需要几天"),
+    ("李经理(厂商)", "培训大概需要三天,由我们负责"),
+    ("张主任(机构)", "那培训负责人就定你们这边,具体日期我们再确认"),
+    ("李经理(厂商)", "没问题,发票和合同本周内寄出"),
+    ("王护士长(机构)", "耗材的价格清单也要一起提供"),
+    ("李经理(厂商)", "好的,耗材清单5月15日前发给你们"),
+    ("张主任(机构)", "今天的议题都确认了,辛苦各位"),
+    ("李经理(厂商)", "感谢,我们尽快推进"),
+]
+
+
+class _CallCounter:
+    """进程内全局调用计数(线程安全),供 FAIL_ON_CALL 注入。"""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._counts: dict[str, int] = {}
+
+    def next(self, key: str) -> int:
+        with self._lock:
+            self._counts[key] = self._counts.get(key, 0) + 1
+            return self._counts[key]
+
+
+_counter = _CallCounter()
+
+
+def _fail_on_call(key: str) -> bool:
+    """支持逗号分隔列表:MEET_MOCK_X_FAIL_ON_CALL=1,2,3 表示第1/2/3次调用各失败一次。"""
+    v = os.environ.get(f"MEET_MOCK_{key}_FAIL_ON_CALL")
+    if v is None:
+        return False
+    n = _counter.next(key)
+    return str(n) in [x.strip() for x in v.split(",")]
+
+
+class MockASR(ASRProvider):
+    name = "mock-asr"
+    model_name = "mock-asr-v1"
+
+    def transcribe_slice(self, audio: bytes, slice_index: int) -> ASRSlice:
+        delay = os.environ.get("MEET_MOCK_ASR_DELAY_MS")
+        if delay:
+            time.sleep(int(delay) / 1000)
+        fail_slice = os.environ.get("MEET_MOCK_ASR_FAIL_SLICE")
+        if fail_slice is not None and int(fail_slice) == slice_index:
+            raise RuntimeError(f"[mock] 注入: 分片 {slice_index} 转写失败")
+        if _fail_on_call("ASR"):
+            raise RuntimeError("[mock] 注入: ASR 调用失败(第N次)")
+        speaker, text = CORPUS[slice_index % len(CORPUS)]
+        return ASRSlice(speaker=speaker, text=text, is_mock=True)
+
+
+class MockLLM(LLMProvider):
+    """关键词规则生成纪要草稿:确定性,禁止补造,缺字段一律留空+待确认。"""
+    name = "mock-llm"
+    model_name = "mock-llm-rules-v1"
+    prompt_version = "mock-rules-v1"
+
+    def generate_minutes(self, segments: list[SegmentForLLM]) -> MinutesDraft:
+        if _fail_on_call("LLM"):
+            raise RuntimeError("[mock] 注入: LLM 调用失败(第N次)")
+        items: list[MinutesItemDraft] = []
+        if segments:
+            items.append(
+                MinutesItemDraft(
+                    type="topic",
+                    text=segments[0].text[:80],
+                    certainty="discussed",
+                    evidence_segment_ids=[segments[0].segment_id],
+                )
+            )
+        for seg in segments:
+            text = seg.text
+            # 日期提取(仅来自原文,禁止编造)
+            due = _extract_date(text)
+            certainty = "discussed"
+            if any(k in text for k in ("同意", "确认", "决定", "没问题")):
+                certainty = "decided"
+            elif any(k in text for k in ("建议", "考虑")):
+                certainty = "suggested"
+            # 待办:承诺类动词
+            if any(k in text for k in ("补齐", "寄出", "提供", "送到", "发给", "负责")):
+                items.append(
+                    MinutesItemDraft(
+                        type="todo",
+                        text=text[:120],
+                        certainty=certainty,
+                        owner=seg.speaker if seg.speaker and "厂商" in seg.speaker else None,
+                        due_date=due,
+                        evidence_segment_ids=[seg.segment_id],
+                        needs_confirmation=(due is None),
+                    )
+                )
+            elif certainty == "decided":
+                items.append(
+                    MinutesItemDraft(
+                        type="decision",
+                        text=text[:120],
+                        certainty=certainty,
+                        owner=None,
+                        due_date=due,
+                        evidence_segment_ids=[seg.segment_id],
+                        needs_confirmation=True,
+                    )
+                )
+        return MinutesDraft(items=items, is_mock=True)
+
+
+def _extract_date(text: str) -> str | None:
+    """从原文提取日期,找不到返回 None(禁止补造)。"""
+    import re
+
+    m = re.search(r"(\d{1,2}月\d{1,2}[日号])", text)
+    if m:
+        return m.group(1)
+    m = re.search(r"(\d{4}-\d{2}-\d{2})", text)
+    if m:
+        return m.group(1)
+    return None
+
+
+class MockEmbed(EmbedProvider):
+    """字符 bigram 哈希向量:确定性,字面重叠→高余弦,无语义泛化。"""
+    name = "mock-embed"
+    model_name = "mock-embed-bigram-v1"
+
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        if _fail_on_call("EMBED"):
+            raise RuntimeError("[mock] 注入: Embed 调用失败(第N次)")
+        return [self._embed_one(t) for t in texts]
+
+    @staticmethod
+    def _embed_one(text: str) -> list[float]:
+        vec = [0.0] * EMBEDDING_DIM
+        normalized = "".join(text.split())
+        for i in range(len(normalized) - 1):
+            bigram = normalized[i : i + 2]
+            idx = int.from_bytes(
+                hashlib.sha256(bigram.encode("utf-8")).digest()[:4], "big"
+            ) % EMBEDDING_DIM
+            vec[idx] += 1.0
+        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
+        return [round(v / norm, 8) for v in vec]
+
+
+def get_providers() -> tuple[MockASR, MockLLM, MockEmbed]:
+    """按当前配置返回 Provider 实例(当前仅 mock;真实适配器 P3 接入)。"""
+    return MockASR(), MockLLM(), MockEmbed()

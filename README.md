@@ -62,8 +62,20 @@ P1.1(已完成并验证,23/23 测试通过):
 - 任务状态查询 GET /jobs/{id}(访问范围跟随会谈)
 - 跨机构隔离:会谈/任务/上传均 404;无权与不存在不区分
 
+P1.2(已完成并验证,e2e 全部经真实子进程 worker):
+- 租约机制:原子领取(epoch+1,Skip Locked)、心跳续租(仅当前 epoch 且未过期)、
+  短事务提交守卫(锁行 + clock_timestamp 校验,旧 epoch/过期租约拒绝提交)
+- 四阶段流水线:prepare(WAV 切片,边界即时间来源)→ transcribe(分片级断点以 DB 为准,
+  成功片复用)→ minutes(规则 mock + 层1校验)→ index(分批 is_active=false,全部完成后原子切换)
+- 双版本指针:active_transcript_version 转写发布;active_search_version 索引就绪,
+  检索只依据后者,半成品不可见
+- mock Provider 确定性输出 + 故障注入/延迟(环境变量);model_run 全量记录(is_mock 标识,
+  结果缓存按 job 隔离,幂等键不含 attempt)
+- 验收测试:独立进程完成流水线、租约三态拒绝、并发领取唯一、分片重试不重复调用、
+  中途失败不暴露半成品、重复执行无重复产物
+
 尚未实现:
-- P1.2 独立 worker 流水线(mock Provider)、P1.3 检索问答、前端、评测
+- P1.3 检索问答 API、前端、评测;P2 崩溃恢复系统测试(回收路径代码已有)、重试退避
 
 ## 已知限制与环境备注
 
