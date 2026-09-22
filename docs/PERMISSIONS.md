@@ -13,8 +13,10 @@
 | 创建会谈 | `POST /meetings` | 任意认证用户;org_id/created_by 取自身份;白名单用户须属本机构 |
 | 录音上传 | `POST /meetings/{id}/recordings` | 对该会谈有访问权的任意用户(不区分角色);同会谈同内容 409 |
 | 任务状态 | `GET /jobs/{id}` | 经录音→会谈 join 可见性条件;404 不区分 |
-| 检索问答 | `POST /meetings/{id}/ask` | 三重条件:① 会谈访问检查(404);② 候选 SQL 显式 `meeting_id = URL 会谈`;③ 候选 SQL 权限注入(org_id 等值 + 可见会谈子查询);另匹配发布指针(is_active 且 version = active_search_version),未发布版本不可检索 |
+| 检索问答 | `POST /meetings/{id}/ask` | 三重条件:① 会谈访问检查(404);② 候选 SQL 显式 `meeting_id = URL 会谈`;③ 候选 SQL 权限注入(org_id 等值 + 可见会谈子查询);另匹配发布指针(is_active 且 version = active_search_version),未发布版本不可检索;预算耗尽/不可核算 → 503(不回退 mock) |
 | 纪要查看 | `GET /meetings/{id}/minutes` | 会谈访问检查;条目证据解析限定本会谈录音的版本链(防跨会谈探测);最新纪要版本的证据引用旧版本片段仍可解析(片段不可变) |
+| 人工转写导入 | `POST /meetings/{id}/transcript` | 会谈访问检查(404);`recording_id` 指定时须属本会谈(否则同样 404,不区分);导入者记入 `transcript_version.created_by`;模型调用按调用者机构记账与预算约束 |
+| 运行元信息 | `GET /meta` | 仅认证用户可读;返回**实际生效**的 Provider 组合与是否 mock(配置不可用时 503,不伪装) |
 
 ## 未实现入口(明确列出,不冒充已有)
 

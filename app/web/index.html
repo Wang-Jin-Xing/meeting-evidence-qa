@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>会谈纪要与证据问答 · 演示</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">医疗机构与厂商会谈 · 智能纪要与证据问答</div>
+  <div id="meta-badge" class="badge">模型配置加载中…</div>
+  <div id="who" class="who"></div>
+</header>
+
+<main id="app">
+  <section id="view-login" class="card">
+    <h2>登录</h2>
+    <p class="hint">机构归属由服务端根据账号解析,页面不提供选择机构的入口。</p>
+    <form id="login-form">
+      <label>用户名 <input id="username" autocomplete="username" required></label>
+      <label>密码 <input id="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">登录</button>
+      <span id="login-msg" class="msg"></span>
+    </form>
+    <p class="hint">演示账号由 <code>demo/seed_demo.py</code> 生成,见 README。</p>
+  </section>
+
+  <section id="view-meetings" class="hidden">
+    <div class="card">
+      <div class="row-between">
+        <h2>我的会谈</h2>
+        <button id="btn-new">新建会谈</button>
+      </div>
+      <form id="new-meeting" class="inline hidden">
+        <input id="m-title" placeholder="会谈主题" required>
+        <input id="m-vendor" placeholder="厂商名称" required>
+        <select id="m-vis">
+          <option value="org">本机构可见</option>
+          <option value="restricted">受限(白名单)</option>
+        </select>
+        <button type="submit">创建</button>
+      </form>
+      <ul id="meeting-list" class="list"></ul>
+    </div>
+  </section>
+
+  <section id="view-detail" class="hidden">
+    <div class="card">
+      <button id="btn-back">← 返回列表</button>
+      <h2 id="d-title"></h2>
+      <div id="d-meta" class="meta"></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>1. 录音上传与处理进度</h3>
+        <input type="file" id="audio" accept=".wav">
+        <button id="btn-upload">上传并开始处理</button>
+        <p class="hint">上传只落盘与建任务;转写/纪要/索引由独立 worker 进程完成。</p>
+        <div id="jobs"></div>
+      </div>
+
+      <div class="card">
+        <h3>2. 人工转写导入(权威文本来源)</h3>
+        <p class="hint">每行一句,可写 <code>说话人: 内容</code>。行数须与音频切片数
+          (每 10 秒 1 片)一致;不符时后端会返回期望切片数并拒绝导入。</p>
+        <textarea id="transcript" rows="10" placeholder="王主任(机构): 今天确定采购数量与交付时间"></textarea>
+        <label class="chk"><input type="checkbox" id="gen-minutes" checked> 同时生成纪要并重建索引</label>
+        <button id="btn-import">导入转写</button>
+        <div id="import-result" class="result"></div>
+      </div>
+
+      <div class="card">
+        <h3>3. 结构化纪要(含证据引用)</h3>
+        <div id="minutes"><span class="hint">尚无纪要。</span></div>
+      </div>
+
+      <div class="card">
+        <h3>4. 会谈内证据问答</h3>
+        <form id="ask-form">
+          <input id="question" placeholder="例如:注册证什么时候补齐?" required>
+          <button type="submit">提问</button>
+        </form>
+        <div id="answer"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast hidden"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

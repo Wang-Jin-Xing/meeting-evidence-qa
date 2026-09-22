@@ -227,7 +227,9 @@ class MockLLM(LLMProvider):
                         owner=seg.speaker if seg.speaker and "厂商" in seg.speaker else None,
                         due_date=due,
                         evidence_segment_ids=[seg.segment_id],
-                        needs_confirmation=(due is None),
+                        # 空值策略:负责人或截止日期缺失都必须转人工确认
+                        needs_confirmation=(due is None or
+                                            not (seg.speaker and "厂商" in seg.speaker)),
                     )
                 )
             elif certainty == "decided":

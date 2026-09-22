@@ -91,6 +91,8 @@ def get_meeting(
                 job_current_stage=job.current_stage if job else None,
             )
         )
-    detail = MeetingDetail.model_validate(meeting)
-    detail.recordings = recordings
-    return detail
+    # 会话内先按 MeetingOut 取标量字段,再显式挂 recordings:
+    # 直接 model_validate(meeting) 会把 ORM Recording 对象当 RecordingBrief 校验,
+    # 而 job_* 是派生字段(只存在于 ProcessingJob),必然 500。
+    base = MeetingOut.model_validate(meeting).model_dump()
+    return MeetingDetail(**base, recordings=recordings)

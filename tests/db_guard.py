@@ -131,14 +131,36 @@ def setup_test_database() -> str:
         )
 
     # 切换应用配置:此后(重新)导入的 app.core.db.engine 指向测试库,
-    # worker 子进程经 os.environ 继承同一 DATABASE_URL。
+    # worker 子进程经继承的 DATABASE_URL 走同一测试库。
     # 注意用原始字符串而非 str(URL)——后者会把密码渲染为 ***。
     os.environ["DATABASE_URL"] = raw_test
     from app.core.config import get_settings
 
     get_settings.cache_clear()
     _migrate_test_database()
+    _acquire_exclusive_lock(test_url)
     return actual
+
+
+_LOCK_KEY = 0x4D454554  # 'MEET':同一测试库同时只允许一个 pytest 会话
+
+_HELD_LOCK = []  # 持有连接引用,进程结束自动释放
+
+
+def _acquire_exclusive_lock(test_url) -> None:
+    """测试库独占:并发跑两个 pytest 会话会互相 TRUNCATE,产生无法解释的
+    外键违规等假故障。用会话级 advisory lock 让第二个会话直接拒绝启动。"""
+    conn = create_engine(test_url, isolation_level="AUTOCOMMIT").connect()
+    got = conn.execute(
+        text("SELECT pg_try_advisory_lock(:k)"), {"k": _LOCK_KEY}
+    ).scalar()
+    if not got:
+        conn.close()
+        raise TestDatabaseConfigError(
+            f"另一个 pytest 会话正持有测试库 {test_url.database} 的独占锁。"
+            "测试库不允许并发运行(会互相清表),请等其结束或另配一个测试库。"
+        )
+    _HELD_LOCK.append(conn)
 
 
 def _migrate_test_database() -> None:

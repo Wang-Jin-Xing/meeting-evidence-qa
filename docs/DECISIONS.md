@@ -4,6 +4,49 @@
 
 ## P3(2026-09-23,进行中)
 
+- **D-42 费用三态与"预算不可核算"**:`model_run.cost_basis` ∈
+  {estimated, provider_reported, unknown};`cost_estimate` 为 NULL 表示**未知而非 0**。
+  mock 调用恒为 unknown(is_mock=true,本地计算不产生真实费用,也不得冒充真实成本)。
+  推论:机构设置了预算却存在成本未知的**真实**调用时,预算无法核算 →
+  claim 与调用双重拒绝(宁可停住,不按 0 放行)。结果未知(超时/断连)的调用
+  按预估保守计为已用,与 D-28"不宣称避免重复计费"一致。已实现。
+- **D-38(修订 D-36)预算在每次外部调用前预留**:只在领取时比较历史费用,
+  拦不住一个领取后连续调用数百次的长任务。`app/services/budget.py` 在发出调用前
+  做原子预留(受守卫约束的 `UPDATE organization SET reserved_cents = reserved_cents + est`
+  且 `SUM(cost_estimate)+reserved+est <= budget`,rowcount=0 即 BudgetExceededError →
+  **不调用 Provider**);返回后结算。并发由 organization 行锁串行。
+  边界:预估不足时实际成本可能小幅超出预留(以 model_run 记账为准);
+  问答(HTTP 内)与离线导入同样走这条路径,不再有免费调用旁路。已实现。
+- **D-43 Provider 工厂:配置驱动且不静默回退 mock**:`ASR_PROVIDER/LLM_PROVIDER/
+  EMBED_PROVIDER` 决定实现;未注册名 / 缺凭证 / Embedding 维度与向量列不符
+  分别抛 Unknown / Credential / Dimension 三类错误(维度校验落实 D-03)。
+  `describe_providers()` 供报告与界面显示**实际生效**模型,禁止硬编码 mock。
+  已实现。
+- **D-44 人工转写导入路径(ASR 不可用时的权威来源)**:
+  `POST /meetings/{id}/transcript` → 无转写版本时建 `human_transcription` 首版,
+  已有版本时建 `human_correction` 追加版 + 逐条 `segment_mapping`;
+  **时间轴仍来自音频切片**(行数须等于切片数,不符即拒绝,绝不由文本推断位置);
+  随后按配置生成纪要(层1校验)并重建索引、原子发布。原版本片段不可变,
+  历史引用仍可解析。边界:该入口是数据通路,不等于纪要人工确认/编辑工作流
+  (仍未实现);`transcript_version.source_type` 在库中是 VARCHAR 且**无 CHECK 约束**
+  (迁移遗留),取值仅由应用层枚举保证。已实现。
+- **D-45 真实模型组合冻结(2026-09-23)**:实测 DeepSeek `deepseek-chat` 可用
+  (返回 usage.tokens,成本按单价表估算,未配单价则 unknown);
+  SiliconFlow 的 `FunAudioLLM/SenseVoiceSmall`(ASR)与 `BAAI/bge-m3`(Embedding,
+  维度 1024 恰与向量列一致)均返回 **402 账户余额不足**,故真实 ASR 与真实检索
+  本轮不可用。冻结组合 = **真实 LLM(DeepSeek)+ mock Embedding + 人工转写来源**;
+  不再做模型选型实验。界面与评测报告必须逐项标注该来源与是否 mock,
+  检索质量结论在真实 Embedding 接入前一律不成立。部分实现(检索仍 mock)。
+- **D-46 演示界面为无构建步骤的静态页**:`app/web/`(原生 HTML/CSS/JS)由 FastAPI
+  挂载在 `/`,只做既有 API 的呈现,不含管理后台、不含业务判断(权限与模型选择
+  全在后端)。理由:交付窗口内可维护、可交接,零前端工具链。已实现。
+- **D-47 模型输出归一只向更保守方向修正**:真实 LLM 的纪要条目若缺
+  owner/due_date,适配器强制 `needs_confirmation=true`(不代为补造),
+  未知 type/certainty 降级为 discussion/discussed;越界证据 id 不静默剔除,
+  仍由服务层引用校验判为协议违规。校验不通过即 502 显式失败。已实现。
+
+## P3 初始评测框架(2026-09-23)
+
 - **D-40 评测框架(初始,报告自描述)**:`eval/dataset.json` 以 `split_by=meeting`
   按会谈划分 dev/test(冻结靠 `dataset_version` + 报告内 sha256),语料经
   `MEET_MOCK_ASR_CORPUS_FILE` 注入 mock ASR(每句对应一个 10s 切片),

@@ -82,6 +82,42 @@ def _parse_json(content: str) -> dict:
         raise RuntimeError(f"模型输出 JSON 解析失败: {e};原文 {content[:160]!r}") from e
 
 
+_TYPES = {"topic", "discussion", "decision", "todo", "needs_confirmation"}
+_CERTAINTY = {"suggested", "discussed", "decided"}
+
+
+def _normalize_minutes_item(it: dict) -> MinutesItemDraft:
+    """把模型输出约束到契约允许的形状,**只向更保守方向修正**:
+    - 未知 type/certainty → discussion/discussed(不升级为"已决定");
+    - decision|todo 缺 owner 或 due_date → 强制 needs_confirmation(待人工确认),
+      绝不代为补造负责人或日期;
+    - 证据 id 只保留数字(越界 id 由服务层引用校验拒绝,不在这里静默剔除)。
+    """
+    item_type = str(it.get("type") or "discussion")
+    if item_type not in _TYPES:
+        item_type = "discussion"
+    certainty = str(it.get("certainty") or "discussed")
+    if certainty not in _CERTAINTY:
+        certainty = "discussed"
+    owner = (str(it.get("owner")).strip() or None) if it.get("owner") else None
+    due = (str(it.get("due_date")).strip() or None) if it.get("due_date") else None
+    needs = bool(it.get("needs_confirmation") or False)
+    if item_type in ("decision", "todo") and (owner is None or due is None):
+        needs = True
+    return MinutesItemDraft(
+        type=item_type,
+        text=str(it.get("text") or "").strip(),
+        certainty=certainty,
+        owner=owner,
+        due_date=due,
+        evidence_segment_ids=[
+            int(x) for x in (it.get("evidence_segment_ids") or [])
+            if str(x).lstrip("-").isdigit()
+        ],
+        needs_confirmation=needs,
+    )
+
+
 class DeepSeekLLM(LLMProvider):
     name = "deepseek"
     prompt_version = PROMPT_VERSION
@@ -171,22 +207,7 @@ class DeepSeekLLM(LLMProvider):
         )
         content = self._chat(_MINUTES_SYSTEM, user)
         raw = _parse_json(content).get("items") or []
-        items = []
-        for it in raw:
-            if not isinstance(it, dict):
-                continue
-            items.append(MinutesItemDraft(
-                type=str(it.get("type") or "discussion"),
-                text=str(it.get("text") or ""),
-                certainty=str(it.get("certainty") or "discussed"),
-                owner=it.get("owner") or None,
-                due_date=it.get("due_date") or None,
-                evidence_segment_ids=[
-                    int(x) for x in (it.get("evidence_segment_ids") or [])
-                    if str(x).lstrip("-").isdigit()
-                ],
-                needs_confirmation=bool(it.get("needs_confirmation") or False),
-            ))
+        items = [_normalize_minutes_item(it) for it in raw if isinstance(it, dict)]
         return MinutesDraft(items=items, is_mock=False)
 
     def answer_question(self, question: str,

@@ -57,3 +57,21 @@ def validate_minutes(content: dict, valid_segment_ids: set[int]) -> MinutesConte
                 f"条目{i}: 负责人或截止日期缺失时必须标记待确认(禁止补造)"
             )
     return parsed
+
+
+def draft_to_content(draft) -> dict:
+    """LLM 草稿(MinutesDraft)→ 落库/校验用的结构化内容。
+
+    worker 阶段与离线人工转写导入共用本映射,保证两条路径产出的纪要同构。
+    """
+    return {
+        "items": [
+            {
+                "type": it.type, "text": it.text, "certainty": it.certainty,
+                "owner": it.owner, "due_date": it.due_date,
+                "evidence_segment_ids": list(it.evidence_segment_ids),
+                "needs_confirmation": it.needs_confirmation,
+            }
+            for it in draft.items
+        ]
+    }

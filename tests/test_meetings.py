@@ -96,3 +96,32 @@ def test_create_restricted_whitelist_must_be_same_org(client, session, two_orgs)
         headers=headers,
     )
     assert resp.status_code == 422
+
+
+def test_meeting_detail_includes_recording_job_fields(client, session, two_orgs):
+    """详情接口在已有录音时仍须 200,并带派生的 job_* 字段。
+
+    回归:此前 MeetingDetail.model_validate(meeting) 会把 ORM Recording
+    当 RecordingBrief 校验,而 job_id/job_status 只存在于 ProcessingJob 上,
+    任何带录音的会谈详情都 500(测试界面点开会谈即触发)。
+    """
+    from tests.conftest import make_meeting, make_wav_bytes
+
+    org, user = two_orgs["org_a"], two_orgs["a_admin"]
+    meeting = make_meeting(session, org, user)
+    headers = auth_headers(client, user.username)
+    up = client.post(
+        f"/meetings/{meeting.id}/recordings",
+        files={"file": ("a.wav", make_wav_bytes(seconds=12), "audio/wav")},
+        headers=headers,
+    )
+    assert up.status_code == 202
+
+    body = client.get(f"/meetings/{meeting.id}", headers=headers)
+    assert body.status_code == 200, body.text
+    recs = body.json()["recordings"]
+    assert len(recs) == 1
+    assert recs[0]["job_id"] == up.json()["job_id"]
+    assert recs[0]["job_status"] == "queued"
+    assert set(recs[0]) >= {"id", "original_filename", "checksum",
+                            "job_id", "job_status", "job_current_stage"}

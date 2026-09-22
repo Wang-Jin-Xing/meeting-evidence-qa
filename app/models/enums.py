@@ -49,7 +49,8 @@ class SliceStatus(str, Enum):
 
 class TranscriptSourceType(str, Enum):
     asr = "asr"                        # 任务自动转写
-    human_correction = "human_correction"  # 人工纠错(新版本)
+    human_transcription = "human_transcription"  # 人工转写导入(无自动转写版本时)
+    human_correction = "human_correction"  # 人工纠错(在被纠错版本之上追加)
     re_asr = "re_asr"                  # 重新转写
 
 

@@ -8,14 +8,9 @@
 - 后端:Python 3.11 + FastAPI + SQLAlchemy 2 + Alembic
 - 数据库:PostgreSQL 16 + pgvector(Docker,无 SQLite 降级路径)
 - 后台任务:独立 worker 进程 + 数据库任务表 + 租约(fencing)机制
-- 前端:React + Vite(Phase 1 起)
-- 模型接入:Provider 接口隔离 ASR/LLM/Embedding,默认 mock 实现,密钥走环境变量
-
-## 环境要求
-
-- Python 3.11+
-- Docker Desktop(需 daemon 运行中)
-- Git
+- 界面:`app/web/` 原生 HTML/CSS/JS 静态页(无构建步骤,由 FastAPI 挂载在 `/`)
+- 模型接入:Provider 接口隔离 ASR/LLM/Embedding,按配置选择且**不静默回退 mock**;
+  默认 mock,真实密钥只走环境变量
 
 ## 启动步骤
 
@@ -37,14 +32,55 @@ Copy-Item .env.example .env
 # 4. 数据库迁移(应用库)
 .\.venv\Scripts\python.exe -m alembic upgrade head
 
-# 5. 冒烟测试(真实连接 PostgreSQL 的集成测试)
-#    测试自行完成:建测试库(若不存在)→ 迁移测试库 → 校验 current_database()
-#    → 仅对测试库 TRUNCATE;worker 子进程继承同一测试库连接。
+# 5. 冒烟测试(真实连接独立测试库的集成测试)
 .\.venv\Scripts\python.exe -m pytest -v
 
-# 6. 启动 API
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+# 6. 启动 API(默认 8000;若被占用改 --port,如 8100)
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8100
+
+# 7. 另开一个终端启动 worker(处理转写/纪要/索引的独立进程)
+.\.venv\Scripts\python.exe -m app.worker
+
+# 8. 打开界面
+start http://127.0.0.1:8100/
 ```
+
+## 演示:数据重建与真实模型组合
+
+```powershell
+# 重建两组虚构演示会谈(正常案例 / 边界案例)+ 演示账号,并逐个问题打印引用结果
+.\.venv\Scripts\python.exe demo/seed_demo.py --reset                 # 全 mock 组合
+$env:LLM_PROVIDER="deepseek"; .\.venv\Scripts\python.exe demo/seed_demo.py --reset   # 真实 LLM 组合
+```
+
+演示账号(密码可用环境变量 `DEMO_PASSWORD` 覆盖,默认见 `demo/seed_demo.py`):
+
+| 账号 | 机构 | 用途 |
+|---|---|---|
+| `demo_admin_a` / `demo_staff_a` | 演示-市第一人民医院 | 正常案例(负责人/日期/待办明确) |
+| `demo_admin_c` / `demo_staff_c` | 演示-康泰儿童医院 | 边界案例(无明确日期 + 型号混淆,`restricted`) |
+| `demo_outsider` | 演示-外部医疗机构 | 越权演示:详情与提问均 404 |
+
+### 当前真实模型组合(如实说明,2026-09-23)
+
+| 环节 | 生效实现 | 说明 |
+|---|---|---|
+| LLM(纪要 + 问答) | **真实** DeepSeek `deepseek-chat` | 返回 tokens 为服务商口径;金额未配单价表 → 成本记 `unknown` |
+| Embedding(检索) | **mock**(字符 bigram) | SiliconFlow `BAAI/bge-m3` 返回 402 账户余额不足,真实检索未接入 |
+| ASR(转写) | **mock** + 人工转写导入 | SiliconFlow `SenseVoiceSmall` 同样 402;演示以人工转写为权威文本来源 |
+
+因此:**问答与纪要的语义判断是真实模型;检索质量结论不成立**(仍是字面重叠检索),
+界面右上角与每次回答都标注了各环节是否 mock。
+`demo/media/*.wav` 是 2 分钟静音占位录音(时长决定切片数即时间轴);
+真实录音可直接替换后重新上传。
+
+## 环境要求
+
+- Python 3.11+
+- Docker Desktop(需 daemon 运行中)
+- Git
+- 可选:真实 LLM 的 `DEEPSEEK_API_KEY`(仅经环境变量注入,不提交)
+
 
 ## 健康检查(两类检查刻意分离)
 
@@ -53,7 +89,7 @@ Copy-Item .env.example .env
 | `GET /health` | 进程存活(liveness),永不触碰数据库 | 无 |
 | `GET /health/ready` | 就绪(readiness),实际执行 `SELECT 1` | PostgreSQL 运行中 |
 
-## 当前状态(Phase 1 进行中,如实记录)
+## 当前状态(如实记录)
 
 Phase 0(已完成并验证):
 - 仓库骨架、PG16+pgvector 容器、Alembic 初始迁移、双健康检查端点、5 项冒烟测试
@@ -122,25 +158,34 @@ P2 收尾(已完成并验证,见 docs/DECISIONS.md D-33~D-37):
 - 恢复复用断言加强:索引中断恢复用例同时核对 model_run 状态计数与
   入口调用批大小(已提交分片复用、不重发)
 
-P3(进行中,评测框架已建、真实模型基线未建):
-- 检索问答评测框架 `eval/`(见 docs/DECISIONS.md D-40/D-41):
-  数据集按会谈划分 dev/test(`eval/dataset.json`,金标含型号错配/否定/
-  日期归属/无答案四类反例),语料经自定义 mock 语料注入,起真实子进程 worker
-  跑完四阶段后逐问调 `/ask` 评分
-- 指标分开统计:证据命中率 / 回答命中率 / 漏判率 / 无答案正确拒答率 /
-  无答案误报率,并按类别汇总;记录每题时延
-- 报告自描述可复现:git rev + **工作区脏标记与内容指纹**(仅记 rev 无法复现
-  未提交代码)、实际写入的数据库名、模型/提示词版本、检索参数、数据集 sha256
-- 运行:`python eval/run_eval.py [--split dev|test|all] [--top-k N] [--threshold F]`
-  (写库由 `DATABASE_URL` 决定,报告如实记录是哪一个)
-- **口径声明**:当前 Provider 全为 mock,分数只证明链路与评分脚本正确,
-  不代表真实检索/事实判断效果;D-32 反例在 mock 基线中确实以误报形式出现,
-  是待真实模型改进的测量对象
+P3 首版(可演示、可复现、可交接):
+- 配置驱动的 Provider 工厂(D-43):未注册名 / 缺凭证 / 向量维度不符分别显式报错,
+  **不静默回退 mock**;`GET /meta` 返回实际生效组合,界面右上角如实标注
+- 真实 LLM 闭环(D-45):DeepSeek 生成结构化纪要与证据问答回答;
+  边界案例上真实模型能拒绝把 Y500 的报价归给 Y300(mock 则会误答,已实测对比)
+- 人工转写导入(D-44):`POST /meetings/{id}/transcript` → 无版本时建
+  `human_transcription` 首版,有版本时追加 `human_correction` + 逐条映射;
+  时间位置仍只来自音频切片,行数与切片数不符即拒绝
+- 费用三态与调用前预算预留(D-42/D-38):`cost_basis` =
+  estimated / provider_reported / unknown,`cost_estimate` 为 NULL 表示未知而非 0;
+  预算在**每次外部调用发出前**原子预留,长任务不会在领取后突破预算;
+  问答与离线导入同样记账,没有免费旁路
+- 评测框架(D-40/D-41):数据集按会谈划分 dev/test,金标含型号错配/否定/
+  日期归属/无答案/越权五类;`--transcript human_corrected` 可先隔离 ASR 误差;
+  报告记录 git rev + **工作区脏标记与内容指纹**、实际写入的数据库、
+  模型/提示词版本、检索参数、数据集 sha256、费用汇总与每题时延
+  - 运行:`python eval/run_eval.py [--split dev|test|all] [--top-k N] [--threshold F]`
+- 最小界面(`app/web/`,无构建步骤):登录、会谈列表与新建、录音上传与四阶段进度、
+  人工转写导入、纪要与证据引用、问答与证据展示;不含管理后台
+- 独立测试库(D-39):`TEST_DATABASE_URL` 必填并以 `current_database()` 复核;
+  测试库会话独占锁(并发跑第二个会话直接拒绝启动)
 
-尚未实现:
-- 真实模型 Provider 适配器与真实基线(需人工校对转写集)
-- 前端(Phase 1 起)、纪要人工确认/编辑流转、原始音频下载、转写版本/片段查看、
-  历史纪要版本内容等入口(见 docs/PERMISSIONS.md 未实现清单)
+尚未实现 / 不成立:
+- 真实 ASR 与真实 Embedding 接入(服务商账户余额不足),因此**检索质量结论不成立**;
+  真实模型基线的评测数字待服务商可用后重跑
+- 纪要人工确认/编辑流转、原始音频下载与回放、转写版本列表/片段单独查看、
+  历史纪要版本内容查看、问答审计查询等入口(见 docs/PERMISSIONS.md 未实现清单)
+- 评测集规模(dev/test 各 1 场会谈)只够流程冒烟,不足以支撑效果结论
 
 ## 已知限制与环境备注
 
@@ -153,3 +198,13 @@ P3(进行中,评测框架已建、真实模型基线未建):
 5. **测试库与应用库分离**:`TEST_DATABASE_URL` 必填,测试启动时会以
    `current_database()` 复核并拒绝在与应用库同名的库上运行(见 D-39)。
    应用库(`meeting_evidence`)不再被测试清表,其中历史测试数据需自行清理。
+6. **测试库不可并发**:两个 pytest 会话会互相 TRUNCATE,故加了会话独占锁;
+   第二个会话会直接拒绝启动(等前一个结束,或另配一个测试库名)。
+7. **枚举列无数据库 CHECK 约束**:迁移以 `native_enum=False` 建列时未生成 CHECK,
+   取值仅由应用层枚举保证(如 `transcript_version.source_type`);
+   后续如要库级约束需单独迁移。
+8. **外部调用不保证只执行一次**:超时/断连记为结果未知(unknown)并按预估
+   保守计入预算,不宣称避免重复调用或重复计费。
+9. **演示录音为静音占位**:音频内容不影响链路(时间轴来自切片边界),
+   转写文本由人工导入提供;真实录音需在真实 ASR 接入后才有意义。
+

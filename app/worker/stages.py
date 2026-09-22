@@ -27,7 +27,11 @@ from app.ai.providers import (
     SegmentForLLM,
 )
 from app.services import call_accounting
-from app.services.minutes_validator import validate_minutes, MinutesValidationError
+from app.services.minutes_validator import (
+    MinutesValidationError,
+    draft_to_content,
+    validate_minutes,
+)
 from app.worker.lease import LeaseLostError, leased_transaction
 
 
@@ -365,21 +369,6 @@ def _read_slice_audio(eng, ctx: JobContext, slice_index: int) -> bytes:
 
 # ---------- minutes ----------
 
-def _minutes_ref(draft) -> dict:
-    """纪要草稿的结构化留痕(既写 model_run.output_ref,也用于层1校验)。"""
-    return {
-        "items": [
-            {
-                "type": it.type, "text": it.text, "certainty": it.certainty,
-                "owner": it.owner, "due_date": it.due_date,
-                "evidence_segment_ids": it.evidence_segment_ids,
-                "needs_confirmation": it.needs_confirmation,
-            }
-            for it in draft.items
-        ]
-    }
-
-
 def run_minutes(eng, ctx: JobContext, epoch: int, llm: LLMProvider, should_abort,
                 provider_timeout: float = 60.0, deadline: float | None = None):
     """基于 active 转写版本生成结构化纪要(经层1校验),幂等。"""
@@ -429,9 +418,9 @@ def run_minutes(eng, ctx: JobContext, epoch: int, llm: LLMProvider, should_abort
             input_hash=input_hash,
             fn=llm.generate_minutes, args=(payload,),
             provider_timeout=provider_timeout, deadline=deadline,
-            prompt_version=llm.prompt_version, to_ref=_minutes_ref,
+            prompt_version=llm.prompt_version, to_ref=draft_to_content,
         )
-        run_id, content = billed.record.run_id, _minutes_ref(billed.result)
+        run_id, content = billed.record.run_id, draft_to_content(billed.result)
 
     # 层1校验:引用存在 + 空值策略;失败则本阶段失败(不落库)
     try:
