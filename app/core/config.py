@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     llm_provider: str = "mock"
     embed_provider: str = "mock"
 
+    # JWT(本地开发默认值;生产/演示请通过 .env 覆盖)
+    jwt_secret: str = "dev-only-secret-change-me"
+    jwt_expire_hours: int = 12
+
+    # 存储(上传原件与阶段产物)
+    storage_dir: str = "storage"
+    max_upload_mb: int = 200
+
 
 @lru_cache
 def get_settings() -> Settings:

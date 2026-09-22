@@ -49,17 +49,21 @@ Copy-Item .env.example .env
 | `GET /health` | 进程存活(liveness),永不触碰数据库 | 无 |
 | `GET /health/ready` | 就绪(readiness),实际执行 `SELECT 1` | PostgreSQL 运行中 |
 
-## 当前状态(Phase 0,如实记录)
+## 当前状态(Phase 1 进行中,如实记录)
 
-已完成并验证:
-- 仓库骨架、依赖锁定(requirements.txt)
-- docker-compose 定义 PG16+pgvector,容器健康检查通过
-- Alembic 初始迁移(启用 pgvector 扩展)已应用
-- `/health` 与 `/health/ready` 端点,5 项冒烟测试全部通过
-- uvicorn 真实进程启动并验证两端点响应
+Phase 0(已完成并验证):
+- 仓库骨架、PG16+pgvector 容器、Alembic 初始迁移、双健康检查端点、5 项冒烟测试
 
-尚未实现(后续阶段):
-- 业务表、API、worker、前端、评测(见 docs/DESIGN.md 规划)
+P1.1(已完成并验证,23/23 测试通过):
+- 全量业务表迁移(14 张:机构/用户/会谈/白名单/录音/任务/阶段/模型调用/转写版本/片段/映射/向量块/纪要版本/问答日志)
+- JWT 登录(/auth/login、/auth/me);机构归属一律由后端身份解析
+- 会谈创建/列表/详情(visibility=org|restricted,白名单限本机构用户)
+- 录音上传:流式落盘+SHA-256 查重(409)、创建 queued 任务与 4 个 pending 阶段,请求内零模型调用
+- 任务状态查询 GET /jobs/{id}(访问范围跟随会谈)
+- 跨机构隔离:会谈/任务/上传均 404;无权与不存在不区分
+
+尚未实现:
+- P1.2 独立 worker 流水线(mock Provider)、P1.3 检索问答、前端、评测
 
 ## 已知限制与环境备注
 

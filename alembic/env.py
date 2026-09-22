@@ -7,8 +7,8 @@ from sqlalchemy import engine_from_config, pool
 from app.core.config import get_settings
 from app.core.db import Base
 
-# 导入所有模型模块以确保元数据完整(Phase 1 起逐个添加)
-# import app.models  # noqa
+# 导入所有模型模块以确保元数据完整
+import app.models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

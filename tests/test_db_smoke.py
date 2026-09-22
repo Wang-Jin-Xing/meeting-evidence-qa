@@ -1,16 +1,16 @@
-"""数据库冒烟测试(集成):真实连接 PostgreSQL 并验证 pgvector 可用。
-
-覆盖三点:
-1. 连接与查询(SELECT 1);
-2. 初始迁移已执行(alembic_version 为期望版本,pgvector 扩展存在);
-3. vector 类型实际可用(能构造向量并计算维度)。
-"""
+"""数据库冒烟测试(集成):真实连接 PostgreSQL 并验证 pgvector 可用。"""
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
 from app.core.db import engine
 
-EXPECTED_REVISION = "faa9666f6e60"
+
+def _alembic_head() -> str:
+    """动态读取迁移目录当前 head,避免硬编码版本号。"""
+    cfg = Config("alembic.ini")
+    return ScriptDirectory.from_config(cfg).get_current_head()
 
 
 def test_select_one():
@@ -21,7 +21,8 @@ def test_select_one():
 def test_alembic_revision_applied():
     with engine.connect() as conn:
         rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    assert rev == EXPECTED_REVISION, f"期望迁移版本 {EXPECTED_REVISION},实际 {rev}"
+    expected = _alembic_head()
+    assert rev == expected, f"期望迁移版本 {expected},实际 {rev}"
 
 
 def test_pgvector_extension_and_type():
