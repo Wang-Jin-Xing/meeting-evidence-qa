@@ -13,9 +13,14 @@ class Organization(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200), unique=True)
-    # 费用预算(货币分,NULL=不限):组织累计模型费用(SUM(model_run.
-    # cost_estimate))达预算后,claim 不再领取该组织任务(预算参与调度)
+    # 费用预算(货币分,NULL=不限):达预算后 claim 不再领取该机构任务,
+    # 且每次外部调用前需通过预留检查(见 app/services/budget.py)
     budget_cents: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
+    # 在途预留(货币分):调用发出前 +est,结算后 -est。
+    # 与 SUM(model_run.cost_estimate) 相加才是"该机构已占用额度"。
+    reserved_cents: Mapped[float] = mapped_column(
+        Numeric(14, 4), default=0, server_default="0", nullable=False
+    )
 
     users: Mapped[list["User"]] = relationship(back_populates="organization")
 

@@ -17,6 +17,8 @@ from sqlalchemy.engine import Connection, Engine
 
 from app.core.db import engine
 from app.models.enums import JobStatus
+# 预算口径的 SQL 片段与调用级预留共用同一份定义,避免领取侧与调用侧规则漂移
+from app.services.budget import GAP_SUBQUERY, SPEND_SUBQUERY
 
 
 class LeaseLostError(Exception):
@@ -30,15 +32,17 @@ def worker_id() -> str:
 def claim_job(eng: Engine, wid: str, ttl_seconds: int, max_attempts: int = 3) -> int | None:
     """原子领取一个任务,返回 job_id;无任务返回 None。
 
-    领取事务内完成并立即提交。调度守卫(P2 收尾):
+    领取事务内完成并立即提交。调度守卫(P2 收尾 / P3 修订):
     - 候选含 queued 与租约过期的 running(过期回收);
     - attempt_count 达上限的任务不领取(重试上限参与调度);
     - next_run_at 未到的任务不领取(失败退避);
-    - 组织累计模型费用(SUM(model_run.cost_estimate))已达预算
-      (organization.budget_cents,NULL=不限)的任务不领取(费用预算参与调度)。
+    - 机构"已占用额度"(历史成本 SUM + 在途预留)达预算的任务不领取;
+      设置了预算但存在成本未知(NULL)的真实调用时视为不可核算,同样不领取
+      (NULL 不当 0,见 D-42)。领取侧只是粗粒度闸门,真正的约束在每次
+      外部调用前的预留(app/services/budget.py)。
     """
     sql = text(
-        """
+        f"""
         UPDATE processing_job SET
             status = 'running',
             lease_epoch = lease_epoch + 1,
@@ -56,9 +60,9 @@ def claim_job(eng: Engine, wid: str, ttl_seconds: int, max_attempts: int = 3) ->
               AND (j.next_run_at IS NULL
                    OR j.next_run_at <= clock_timestamp()::timestamp)
               AND j.attempt_count < :max_attempts
-              AND (o.budget_cents IS NULL OR o.budget_cents > COALESCE((
-                    SELECT SUM(mr.cost_estimate) FROM model_run mr
-                    WHERE mr.org_id = o.id), 0))
+              AND (o.budget_cents IS NULL
+                   OR ({GAP_SUBQUERY}
+                       AND {SPEND_SUBQUERY} + o.reserved_cents < o.budget_cents))
             ORDER BY j.created_at
             LIMIT 1
             FOR UPDATE SKIP LOCKED

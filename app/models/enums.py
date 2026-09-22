@@ -74,6 +74,14 @@ class ModelRunStatus(str, Enum):
     unknown = "unknown"  # 超时/断连,结果未知
 
 
+class CostBasis(str, Enum):
+    """费用口径三态。NULL 成本一律是 unknown,不得当作 0 参与预算核算。"""
+
+    estimated = "estimated"                      # 按单价表估算(实际可小幅偏差)
+    provider_reported = "provider_reported"      # 服务商返回的用量/账单口径
+    unknown = "unknown"                          # 无成本信息,cost_estimate 必须为 NULL
+
+
 class MappingChangeType(str, Enum):
     unchanged = "unchanged"
     text_edited = "text_edited"

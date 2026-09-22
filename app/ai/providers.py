@@ -15,6 +15,22 @@ class ProviderResultUnknownError(Exception):
 
 
 @dataclass
+class ProviderUsage:
+    """一次调用的用量与费用(三态口径,详见 docs/DECISIONS.md D-42)。
+
+    basis:
+    - provider_reported:服务商返回的用量/账单口径,最可信;
+    - estimated:按单价表估算(实际可能小幅偏差);
+    - unknown:无任何成本信息。**cost_cents 必须为 None,不得按 0 记账**。
+    """
+
+    basis: str = "unknown"
+    cost_cents: float | None = None
+    tokens_in: int | None = None
+    tokens_out: int | None = None
+
+
+@dataclass
 class ASRSlice:
     """一个音频分片的转写结果。时间信息由调用方(切片边界)提供,ASR 不产生时间。"""
     speaker: str | None
@@ -69,17 +85,39 @@ class QAAnswer:
     is_mock: bool = True
 
 
-class ASRProvider:
-    name = "asr"
+class _ProviderBase:
+    """Provider 公共契约:身份声明 + 成本核算钩子。
+
+    is_mock 默认 False:真实适配器若忘了声明,会被记为真实调用,
+    从而在预算核算上保守(缺成本信息即阻断),而不是静默按 mock 放过。
+    """
+
+    name = "provider"
     model_name = "unknown"
+    is_mock = False
+
+    def estimate_cost(self, call: str, units: dict) -> float | None:
+        """发出调用前的费用预估(分)。None = 该 Provider 无价格口径。
+
+        预算执行依赖它:真实 Provider 返回 None 且机构设了预算时,
+        调用会被拒绝(预算不可核算),而不是当作 0 放行。
+        """
+        return None
+
+    def usage_for(self, call: str, units: dict, result) -> ProviderUsage | None:
+        """调用成功后从结果(或服务商响应)读取实际用量。None = 无用量信息。"""
+        return None
+
+
+class ASRProvider(_ProviderBase):
+    name = "asr"
 
     def transcribe_slice(self, audio: bytes, slice_index: int) -> ASRSlice:
         raise NotImplementedError
 
 
-class LLMProvider:
+class LLMProvider(_ProviderBase):
     name = "llm"
-    model_name = "unknown"
     prompt_version = "unknown"
 
     def generate_minutes(self, segments: list[SegmentForLLM]) -> MinutesDraft:
@@ -92,9 +130,11 @@ class LLMProvider:
         raise NotImplementedError
 
 
-class EmbedProvider:
+class EmbedProvider(_ProviderBase):
     name = "embed"
-    model_name = "unknown"
+
+    # 真实适配器必须声明其输出维度;工厂据此与向量列维度核对(D-03)。
+    embedding_dim: int | None = None
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         raise NotImplementedError

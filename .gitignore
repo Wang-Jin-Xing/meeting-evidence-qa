@@ -22,6 +22,9 @@ storage/
 eval/reports/
 eval/.work/
 
+# 测试期 worker 子进程 stderr(仅用于失败诊断,可随时重生成)
+.pytest_worker_logs/
+
 # 前端(Phase 1 创建)
 frontend/node_modules/
 frontend/dist/

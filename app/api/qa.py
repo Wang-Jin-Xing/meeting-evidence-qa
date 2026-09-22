@@ -7,6 +7,7 @@ from app.core.deps import get_current_user
 from app.models.org import User
 from app.schemas.qa import AnswerOut, QuestionIn
 from app.services import qa_service
+from app.services import budget
 from app.services.access import get_accessible_meeting
 
 router = APIRouter(tags=["qa"])
@@ -36,4 +37,15 @@ def ask_meeting(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"问答引用校验失败: {e}",
+        )
+    except budget.BudgetExceededError as e:
+        # 预算耗尽:在发出模型调用之前就拒绝(不是"先调用再记账")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"模型费用预算已耗尽,暂不可回答:{e}",
+        )
+    except budget.BudgetUnaccountedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"模型费用不可核算,暂不可回答:{e}",
         )

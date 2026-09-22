@@ -6,6 +6,11 @@
   (P2 修订:崩溃恢复中"结果未知的调用 + 重发调用"各自留痕);
 - status=unknown:调用已发出但结果未知(进程死亡/超时/断连),
   该行即"可能重复调用/计费"的审计证据,不宣称避免。
+- 费用三态(cost_basis):provider_reported(服务商返回用量)/ estimated
+  (单价表估算)/ unknown(无成本信息)。cost_estimate 为 NULL 表示**未知**,
+  不是 0:预算核算遇到 unknown 的真实调用即视为不可核算(见 D-42)。
+  mock 调用 is_mock=true 且恒为 unknown——本地计算不产生真实费用,
+  也不得被当作真实成本参与对比。
 """
 from datetime import datetime
 
@@ -14,7 +19,7 @@ from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
-from app.models.enums import ModelRunStatus
+from app.models.enums import CostBasis, ModelRunStatus
 
 
 class ModelRun(Base):
@@ -40,6 +45,14 @@ class ModelRun(Base):
     idempotency_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
     idempotency_key_sent: Mapped[bool] = mapped_column(default=False)
     cost_estimate: Mapped[float | None] = mapped_column(Numeric(12, 6), nullable=True)
+    # 费用口径(三态):unknown 时 cost_estimate 必须为 NULL,不得按 0 记账。
+    # mock 调用恒为 unknown——本地计算无真实费用,也不得冒充真实成本。
+    cost_basis: Mapped[CostBasis] = mapped_column(
+        Enum(CostBasis, native_enum=False, length=30),
+        default=CostBasis.unknown,
+        server_default=CostBasis.unknown.value,
+        nullable=False,
+    )
     tokens_in: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tokens_out: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

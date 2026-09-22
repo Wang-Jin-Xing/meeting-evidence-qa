@@ -3,6 +3,7 @@
 用法(在仓库根目录):
     python eval/run_eval.py [--split dev|test|all] [--top-k N]
                             [--threshold F] [--out eval/reports/report.json]
+                            [--transcript asr|human_corrected]
 
 流程:按数据集准备会谈(自定义语料注入 mock ASR,子进程 worker 完成四阶段)
 → 逐问调用问答 API → 对照金标评分 → 输出报告 JSON。
@@ -93,7 +94,9 @@ def prepare_meeting(client, session, spec, workdir) -> dict:
     meeting = Meeting(
         org_id=org.id, title=spec["title"], vendor_name=spec["vendor_name"],
         topic=spec.get("topic"), scheduled_at=datetime(2026, 9, 1, 10, 0),
-        visibility=MeetingVisibility.org, created_by=user.id,
+        # 可见性由数据集声明(restricted 才能构造越权反例)
+        visibility=MeetingVisibility(spec.get("visibility", "org")),
+        created_by=user.id,
     )
     session.add(meeting)
     session.commit()
@@ -130,22 +133,135 @@ def prepare_meeting(client, session, spec, workdir) -> dict:
         "MEET_MOCK_ASR_CORPUS_FILE": str(corpus_file),
         "MEET_MOCK_REQUEST_LOG": str(req_log),
     }
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "app.worker", "--idle-exit-seconds", "8"],
-        cwd=REPO_ROOT, env=env,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    try:
-        status = wait_job(job_id, {"succeeded", "failed"})
-        assert status == "succeeded", (
-            f"评测会谈处理失败: {spec['id']}: "
-            f"{q('SELECT last_error FROM processing_job WHERE id=:j', j=job_id)}"
+    err_log = workdir / f"worker-{spec['id']}.err"
+    with open(err_log, "ab") as err:
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "app.worker", "--idle-exit-seconds", "8"],
+            cwd=REPO_ROOT, env=env,
+            stdout=subprocess.DEVNULL, stderr=err,
         )
-    finally:
-        proc.terminate()
-        proc.wait(timeout=10)
+        try:
+            status = wait_job(job_id, {"succeeded", "failed"})
+        finally:
+            proc.terminate()
+            proc.wait(timeout=10)
+    if status != "succeeded":
+        tail = "\n".join(
+            err_log.read_text(encoding="utf-8", errors="replace").splitlines()[-25:]
+        )
+        raise AssertionError(
+            f"评测会谈处理失败: {spec['id']}: "
+            f"{q('SELECT last_error FROM processing_job WHERE id=:j', j=job_id)}\n"
+            f"--- worker stderr 末尾 ---\n{tail}"
+        )
 
-    return {"meeting_id": meeting.id, "headers": headers, "spec": spec}
+    recording_id = q(
+        "SELECT recording_id FROM processing_job WHERE id = :j", j=job_id
+    )[0][0]
+    return {
+        "meeting_id": meeting.id, "org_id": org.id, "recording_id": recording_id,
+        "user_id": user.id, "headers": headers, "spec": spec,
+        "request_log": str(req_log),
+    }
+
+
+def apply_corrected_transcript(session, ctx) -> dict:
+    """导入人工校对转写(新版本,不覆盖原始 ASR 版本)并重建检索索引。
+
+    用途:真实模型评测先隔离 ASR 误差——用校对文本评 Embedding+LLM,
+    再接真实 ASR 量端到端误差。mock 语料与校对文本一致,故此路径在
+    mock 基线下只验证链路正确,不代表真实效果提升。
+    """
+    from app.ai.registry import build_providers
+    from app.services import transcript_correction
+
+    spec = ctx["spec"]
+    lines = spec.get("corrected_corpus")
+    if not lines:
+        raise AssertionError(f"{spec['id']} 未提供 corrected_corpus")
+    _asr, _llm, embed = build_providers()
+    info = transcript_correction.import_corrected_transcript(
+        session.get_bind(),
+        recording_id=ctx["recording_id"],
+        lines=[(l[0], l[1]) for l in lines],
+        created_by=ctx["user_id"],
+        source_note="eval:corrected_corpus",
+    )
+    idx = transcript_correction.rebuild_search_index(
+        session.get_bind(),
+        recording_id=ctx["recording_id"],
+        version_id=info["version_id"],
+        embed=embed,
+    )
+    return {"correction": info, "index": idx}
+
+
+def run_permission_probes(client, session, ctx) -> list[dict]:
+    """越权评测:无权访问该会谈必须 404;有权访问时引用不得越出本会谈。
+
+    与检索质量指标分开统计——权限是正确性,必须 100%,不是可调参的效果项。
+    """
+    from app.core.security import hash_password
+    from app.models.enums import UserRole
+    from app.models.org import MeetingAccess, Organization, User
+
+    rows = []
+    for probe in ctx["spec"].get("permission_probes", []):
+        kind = probe["kind"]
+        ts = datetime.now(timezone.utc).strftime("%H%M%S%f")
+        if kind == "cross_org":
+            org = Organization(name=f"eval-probe-{ctx['spec']['id']}-{ts}")
+            session.add(org)
+            session.commit()
+            user = User(
+                org_id=org.id, username=f"eval-probe-x-{ts}",
+                password_hash=hash_password("eval-only"),
+                display_name="他机构用户", role=UserRole.org_admin,
+            )
+        else:
+            user = User(
+                org_id=ctx["org_id"], username=f"eval-probe-{kind}-{ts}",
+                password_hash=hash_password("eval-only"),
+                display_name=f"探针-{kind}", role=UserRole.staff,
+            )
+        session.add(user)
+        session.commit()
+        if kind == "whitelisted":
+            session.add(MeetingAccess(meeting_id=ctx["meeting_id"], user_id=user.id))
+            session.commit()
+
+        login = client.post(
+            "/auth/login", json={"username": user.username, "password": "eval-only"}
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        resp = client.post(
+            f"/meetings/{ctx['meeting_id']}/ask",
+            json={"question": probe["question"]}, headers=headers,
+        )
+        row = {
+            "pid": probe["pid"], "kind": kind, "category": probe.get("category", "越权"),
+            "question": probe["question"], "expected_status": probe["expect_status"],
+            "status": resp.status_code,
+            "correct": resp.status_code == probe["expect_status"],
+            "citations_within_meeting": None,
+        }
+        if resp.status_code == 200:
+            cited = [
+                c["segment_id"] for c in resp.json().get("citations", [])
+            ]
+            # 引用必须落在本会谈的录音版本链内(跨会谈/跨机构引用即泄露)
+            owned = {
+                r[0] for r in q(
+                    "SELECT ts.id FROM transcript_segment ts"
+                    " JOIN transcript_version tv ON tv.id = ts.version_id"
+                    " JOIN recording r ON r.id = tv.recording_id"
+                    " WHERE r.meeting_id = :m", m=ctx["meeting_id"],
+                )
+            }
+            row["citations_within_meeting"] = set(cited) <= owned
+            row["correct"] = row["correct"] and row["citations_within_meeting"]
+        rows.append(row)
+    return rows
 
 
 def ask(client, meeting_ctx, question: str) -> dict:
@@ -319,13 +435,63 @@ def worktree_state() -> dict:
     }
 
 
-def build_report(dataset_path, results_by_split, elapsed) -> dict:
-    from app.ai.mock_providers import MockEmbed, MockLLM, MockASR
+def cost_summary(org_ids: list[int]) -> dict:
+    """按 model_run 汇总费用口径。
+
+    NULL 成本不按 0 统计:某口径若没有任何"有价"调用,sum_cents 记 None,
+    而不是 0——"没花钱"和"不知道花没花钱"必须能区分(mock 属于后者:
+    本地计算不产生真实费用,但也不能据此宣称真实成本为 0)。
+    """
+    if not org_ids:
+        return {"runs": 0, "by_basis": {}, "unpriced_real_calls": 0}
+    ids = ",".join(str(int(i)) for i in org_ids)  # 全部来自数据库主键,int 化后拼接
+    rows = q(
+        f"SELECT status, cost_basis, count(*), count(cost_estimate),"
+        f" SUM(cost_estimate) FROM model_run WHERE org_id IN ({ids})"
+        " GROUP BY status, cost_basis ORDER BY status, cost_basis"
+    )
+    by_status: dict[str, int] = {}
+    by_basis: dict[str, dict] = {}
+    for status, basis, n, priced, total in rows:
+        by_status[status] = by_status.get(status, 0) + n
+        entry = by_basis.setdefault(
+            basis, {"calls": 0, "priced_calls": 0, "sum_cents": None}
+        )
+        entry["calls"] += n
+        entry["priced_calls"] += priced
+        if priced:
+            entry["sum_cents"] = round((entry["sum_cents"] or 0.0) + float(total), 6)
+    unpriced = q(
+        "SELECT count(*) FROM model_run WHERE org_id IN (%s)"
+        " AND is_mock = false AND cost_estimate IS NULL"
+        " AND status IN ('succeeded','failed')" % ids
+    )[0][0]
+    return {
+        "runs_by_status": by_status,
+        "by_basis": by_basis,
+        "unpriced_real_calls": unpriced,
+        "budget_cents": [
+            r[0] for r in q(
+                f"SELECT budget_cents FROM organization WHERE id IN ({ids})"
+            )
+        ],
+        "note": (
+            "cost_basis=unknown 的行成本为 NULL(未知),不按 0 计入;"
+            "mock 调用恒为 unknown,不得据此声称真实调用零成本"
+        ),
+    }
+
+
+def build_report(dataset_path, results_by_split, elapsed, transcript_mode) -> dict:
+    from app.ai.registry import build_providers, describe_providers
     from app.core.config import get_settings
     from app.models.transcript import EMBEDDING_DIM
 
     s = get_settings()
+    desc = describe_providers(build_providers())
+    all_mock = desc["all_mock"]
     data = json.loads(Path(dataset_path).read_text(encoding="utf-8"))
+    org_ids = [i for block in results_by_split.values() for i in block["org_ids"]]
     return {
         "meta": {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -339,35 +505,54 @@ def build_report(dataset_path, results_by_split, elapsed) -> dict:
                 ).hexdigest()[:16],
                 "split_by": data.get("split_by"),
             },
-            "providers": {
-                "asr": MockASR.model_name,
-                "llm": MockLLM.model_name,
-                "embed": MockEmbed.model_name,
+            "provider_config": {
+                "asr": s.asr_provider, "llm": s.llm_provider,
+                "embed": s.embed_provider,
             },
-            "prompt_version": MockLLM.prompt_version,
-            "embedding_dim": EMBEDDING_DIM,
+            "providers": {
+                "asr": desc["asr"]["model"],
+                "llm": desc["llm"]["model"],
+                "embed": desc["embed"]["model"],
+            },
+            "providers_detail": desc,
+            "prompt_version": desc["llm"]["prompt_version"],
+            "embedding_dim": desc["embed"]["dim"],
             "vector_dim_note": (
-                f"EMBEDDING_DIM={EMBEDDING_DIM} 固定;真实 Provider 维度"
-                "不同需迁移重建(D-03),接入时必须核对"
+                f"向量列维度固定 {EMBEDDING_DIM};Provider 声明维度须与之一致,"
+                "不符时工厂直接报错(需迁移重建,见 D-03)"
+            ),
+            "transcript_mode": transcript_mode,
+            "transcript_mode_note": (
+                "human_corrected=问答基于人工校对转写(隔离 ASR 误差);"
+                "asr=基于流水线转写输出(端到端,含 ASR 误差)"
             ),
             "retrieval": {
                 "top_k": s.qa_top_k,
                 "evidence_threshold": s.qa_evidence_threshold,
             },
             "elapsed_seconds": round(elapsed, 1),
-            "is_mock": True,
+            "is_mock": all_mock,
+            "cost": cost_summary(org_ids),
             "declaration": (
                 "mock Provider 基线:仅证明评测流程与数据链路正确,"
                 "不用于声称真实效果提升;反例误报为待真实模型验证的"
                 "测量对象(D-32)"
+                if all_mock else
+                "非 mock Provider:结果可用于真实效果对比,"
+                "但仍受数据集规模与金标质量限制"
             ),
         },
         "splits": {
             split: {
-                "questions": rows,
-                "summary": summarize(rows),
+                "questions": block["questions"],
+                "summary": summarize(block["questions"]),
+                "permission_probes": block["permissions"],
+                "permission_summary": {
+                    "n": len(block["permissions"]),
+                    "correct": sum(r["correct"] for r in block["permissions"]),
+                },
             }
-            for split, rows in results_by_split.items()
+            for split, block in results_by_split.items()
         },
     }
 
@@ -380,6 +565,10 @@ def main(argv=None) -> dict:
                         help="覆盖检索 top_k(一次只调一种策略)")
     parser.add_argument("--threshold", type=float, default=None,
                         help="覆盖证据相关性阈值")
+    parser.add_argument("--transcript", choices=["asr", "human_corrected"],
+                        default="asr",
+                        help="问答所依据的转写来源:流水线 ASR 输出,或先导入"
+                             "人工校对转写(隔离 ASR 误差,评 Embedding+LLM)")
     parser.add_argument("--out", default=None, help="报告输出路径(JSON)")
     args = parser.parse_args(argv)
 
@@ -410,7 +599,7 @@ def main(argv=None) -> dict:
     workdir.mkdir(parents=True, exist_ok=True)
 
     t_start = time.monotonic()
-    results_by_split: dict[str, list[dict]] = {}
+    results_by_split: dict[str, dict] = {}
     with TestClient(__import__("app.main", fromlist=["app"]).app) as client:
         session = SessionLocal()
         try:
@@ -419,6 +608,12 @@ def main(argv=None) -> dict:
                 print(f"[eval] 会谈就绪: {spec['id']} "
                       f"(meeting={ctx['meeting_id']}, "
                       f"{len(spec['corpus'])} 句)", flush=True)
+                if args.transcript == "human_corrected":
+                    info = apply_corrected_transcript(session, ctx)
+                    c = info["correction"]
+                    print(f"[eval] 人工校对版本已发布: v{c['version_id']} "
+                          f"(改动 {c['edited']}/{c['segments']} 句,"
+                          f"索引 {info['index']['chunks']} 块)", flush=True)
                 rows = []
                 for gold in spec["questions"]:
                     result = ask(client, ctx, gold["question"])
@@ -426,11 +621,24 @@ def main(argv=None) -> dict:
                     rows.append(row)
                     print(f"  {gold['qid']}: correct={row['correct']} "
                           f"({row['latency_ms']}ms)", flush=True)
-                results_by_split.setdefault(spec["split"], []).extend(rows)
+                probes = run_permission_probes(client, session, ctx)
+                for p in probes:
+                    print(f"  {p['pid']}: status={p['status']} "
+                          f"expect={p['expected_status']} correct={p['correct']}",
+                          flush=True)
+                block = results_by_split.setdefault(spec["split"], {
+                    "questions": [], "permissions": [], "org_ids": [],
+                })
+                block["questions"].extend(rows)
+                block["permissions"].extend(probes)
+                block["org_ids"].append(ctx["org_id"])
         finally:
             session.close()
 
-    report = build_report(args.dataset, results_by_split, time.monotonic() - t_start)
+    report = build_report(
+        args.dataset, results_by_split, time.monotonic() - t_start,
+        transcript_mode=args.transcript,
+    )
 
     out = args.out or str(
         Path("eval") / "reports" /
@@ -445,6 +653,11 @@ def main(argv=None) -> dict:
     for split, block in report["splits"].items():
         print(f"[eval] {split}: {json.dumps(block['summary'], ensure_ascii=False)}",
               flush=True)
+        print(f"[eval] {split} 权限探针: "
+              f"{json.dumps(block['permission_summary'], ensure_ascii=False)}",
+              flush=True)
+    print(f"[eval] 费用: {json.dumps(report['meta']['cost']['by_basis'], ensure_ascii=False)}"
+          f" 未定价真实调用={report['meta']['cost']['unpriced_real_calls']}", flush=True)
     return report
 
 

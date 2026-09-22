@@ -1,7 +1,7 @@
 {
-  "dataset_version": "eval-v1",
+  "dataset_version": "eval-v2",
   "split_by": "meeting",
-  "note": "按会谈划分 dev/test;语料经 MEET_MOCK_ASR_CORPUS_FILE 注入 mock ASR(每句对应 10 秒切片)。金标含四类反例:型号错配、否定、日期归属、无答案。mock 基线在已知反例上的误报是待真实模型改进的测量对象,不是数据错误。",
+  "note": "按会谈划分 dev/test;语料经 MEET_MOCK_ASR_CORPUS_FILE 注入 mock ASR(每句对应 10 秒切片)。金标含五类反例:型号错配、否定、日期归属、无答案、越权(权限探针单独统计,必须 100% 正确)。corrected_corpus 为人工校对转写(--transcript human_corrected 使用:先隔离 ASR 误差评 Embedding+LLM,再接真实 ASR 测端到端)。mock 基线在已知反例上的误报是待真实模型改进的测量对象,不是数据错误。",
   "meetings": [
     {
       "id": "dev_x200_purchase",
@@ -9,6 +9,7 @@
       "title": "X200监护仪采购洽谈(评测dev)",
       "vendor_name": "虚构厂商甲",
       "topic": "监护仪采购",
+      "visibility": "restricted",
       "corpus": [
         ["张主任(机构)", "今天主要讨论X200监护仪的采购和交付安排"],
         ["李经理(厂商)", "X200的注册证和检测报告我们会在5月20日之前补齐"],
@@ -26,6 +27,21 @@
         {"qid": "dev_q4_consumables_date", "question": "耗材清单什么时候发?", "answer_clue": "5月15日", "evidence_text": "耗材"},
         {"qid": "dev_neg_model_mismatch", "question": "X300的注册证什么时候补齐?", "no_answer": true, "category": "型号错配+日期归属", "note": "X300未谈注册证;X200的5月20日不得归属到X300(D-32反例)"},
         {"qid": "dev_neg_no_topic", "question": "明年的采购预算是多少?", "no_answer": true, "category": "无答案"}
+      ],
+      "corrected_corpus": [
+        ["张主任(机构)", "今天主要讨论X200监护仪的采购和交付安排"],
+        ["李经理(厂商)", "X200的注册证和检测报告我们会在5月20日之前补齐"],
+        ["张主任(机构)", "X300型号的保修期是多久?和X200有区别吗"],
+        ["李经理(厂商)", "X200整机保修期为2年,X300整机保修期为3年"],
+        ["王护士长(机构)", "建议第一批设备5月10日先到货,第二批月底前完成"],
+        ["李经理(厂商)", "我们同意分两批交付,第一批5月10日送到"],
+        ["李经理(厂商)", "培训大概需要3天,由我们负责"],
+        ["李经理(厂商)", "耗材清单5月15日前发给你们"]
+      ],
+      "permission_probes": [
+        {"pid": "dev_p1_cross_org", "kind": "cross_org", "question": "X200的注册证什么时候补齐?", "expect_status": 404, "category": "越权-跨机构"},
+        {"pid": "dev_p2_same_org_not_whitelisted", "kind": "same_org_plain_user", "question": "X200的注册证什么时候补齐?", "expect_status": 404, "category": "越权-同机构非白名单"},
+        {"pid": "dev_p3_whitelisted_allowed", "kind": "whitelisted", "question": "X200的注册证什么时候补齐?", "expect_status": 200, "category": "越权-白名单正向对照"}
       ]
     },
     {
@@ -34,6 +50,7 @@
       "title": "Y500超声设备采购洽谈(评测test)",
       "vendor_name": "虚构厂商乙",
       "topic": "超声设备采购",
+      "visibility": "org",
       "corpus": [
         ["刘院长(机构)", "今天洽谈Y500超声设备的采购意向和售后条款"],
         ["陈总监(厂商)", "Y500的标准配置报价是每台120万元"],
@@ -53,6 +70,22 @@
         {"qid": "test_neg_negation", "question": "Y300可以折价回收吗?", "answer_clue": "不支持", "evidence_text": "折价回收", "note": "否定反例:正确答案为否定,须出现在回答/引用中"},
         {"qid": "test_neg_model_mismatch", "question": "Y300的报价是多少?", "no_answer": true, "category": "型号错配", "note": "仅Y500报价;Y500的120万不得归属到Y300"},
         {"qid": "test_neg_date_attribution", "question": "Y300的发票什么时候开?", "no_answer": true, "category": "日期归属", "note": "发票条款未绑定型号,Y300专属发票时间不存在"}
+      ],
+      "corrected_corpus": [
+        ["刘院长(机构)", "今天洽谈Y500超声设备的采购意向和售后条款"],
+        ["陈总监(厂商)", "Y500的标准配置报价是每台120万元"],
+        ["刘院长(机构)", "售后响应时间有明确要求吗"],
+        ["陈总监(厂商)", "报修后我们承诺2天之内上门维修服务"],
+        ["赵主任(机构)", "安装场地需要提前多久准备"],
+        ["陈总监(厂商)", "场地准备大约需要5个工作日"],
+        ["陈总监(厂商)", "合同签订后30天内完成交付"],
+        ["赵主任(机构)", "旧设备Y300能否折价回收"],
+        ["陈总监(厂商)", "Y300不支持折价回收,只能按废品处理"],
+        ["陈总监(厂商)", "发票会在交付验收后7天内开具"]
+      ],
+      "permission_probes": [
+        {"pid": "test_p1_cross_org", "kind": "cross_org", "question": "Y500每台报价多少?", "expect_status": 404, "category": "越权-跨机构"},
+        {"pid": "test_p2_same_org_visible", "kind": "same_org_plain_user", "question": "Y500每台报价多少?", "expect_status": 200, "category": "越权-同机构可见(正向对照)"}
       ]
     }
   ]

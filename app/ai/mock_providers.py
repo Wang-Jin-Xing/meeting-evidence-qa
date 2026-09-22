@@ -162,6 +162,7 @@ def _hang_on_call(key: str) -> bool:
 class MockASR(ASRProvider):
     name = "mock-asr"
     model_name = "mock-asr-v1"
+    is_mock = True  # 本地确定性实现,不产生真实费用
 
     def transcribe_slice(self, audio: bytes, slice_index: int) -> ASRSlice:
         # 入口即记录(先于延迟/故障注入):证明本次调用确实发出
@@ -191,6 +192,7 @@ class MockLLM(LLMProvider):
     name = "mock-llm"
     model_name = "mock-llm-rules-v1"
     prompt_version = "mock-rules-v1"
+    is_mock = True
 
     def generate_minutes(self, segments: list[SegmentForLLM]) -> MinutesDraft:
         _log_request("llm", "generate_minutes", segments=len(segments))
@@ -304,6 +306,8 @@ class MockEmbed(EmbedProvider):
     """字符 bigram 哈希向量:确定性,字面重叠→高余弦,无语义泛化。"""
     name = "mock-embed"
     model_name = "mock-embed-bigram-v1"
+    is_mock = True
+    embedding_dim = EMBEDDING_DIM  # 与向量列同维度,工厂接入校验点(D-03)
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         _log_request("embed", "embed_batch", batch_size=len(texts))
@@ -327,6 +331,5 @@ class MockEmbed(EmbedProvider):
         return [round(v / norm, 8) for v in vec]
 
 
-def get_providers() -> tuple[MockASR, MockLLM, MockEmbed]:
-    """按当前配置返回 Provider 实例(当前仅 mock;真实适配器 P3 接入)。"""
-    return MockASR(), MockLLM(), MockEmbed()
+# Provider 的选择(按配置、不可用即报错)在 app/ai/registry.py:
+# 本模块只提供 mock 实现,不做"默认值"决策,避免配置错误被静默兜底。

@@ -18,10 +18,21 @@ class Settings(BaseSettings):
     app_host: str = "127.0.0.1"
     app_port: int = 8000
 
-    # 模型服务:mock 为默认,真实适配器留待后续阶段接入
+    # 模型服务:mock 为默认,真实适配器按 Provider 名注册(app/ai/registry.py)
     asr_provider: str = "mock"
     llm_provider: str = "mock"
     embed_provider: str = "mock"
+
+    # DeepSeek(OpenAI 兼容 Chat Completions)。密钥只经环境变量注入,不写入代码。
+    deepseek_api_key: str | None = None
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_model: str = "deepseek-chat"
+    deepseek_timeout_seconds: float = 90.0
+    deepseek_max_tokens: int = 1600
+    # 单价表(货币 / 1K tokens)。留空 = 成本口径 unknown(只记 tokens 用量),
+    # 不按 0 记账;填入后成本口径变 estimated。
+    llm_price_per_1k_in: float | None = None
+    llm_price_per_1k_out: float | None = None
 
     # JWT(本地开发默认值;生产/演示请通过 .env 覆盖)
     jwt_secret: str = "dev-only-secret-change-me"

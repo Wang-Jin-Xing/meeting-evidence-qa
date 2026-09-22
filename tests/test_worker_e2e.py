@@ -14,7 +14,13 @@ from tests.conftest import auth_headers, make_meeting, make_wav_bytes
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def start_worker(extra_env: dict | None = None, idle_exit: float = 10) -> subprocess.Popen:
+LOG_DIR = REPO_ROOT / ".pytest_worker_logs"
+
+
+def start_worker(extra_env: dict | None = None, idle_exit: float = 10,
+                 log_name: str = "worker") -> subprocess.Popen:
+    """起 worker 子进程。stderr 落盘:否则流水线异常只表现为"等待状态超时",
+    看不到 traceback(排查一次要等满超时)。"""
     env = {
         **os.environ,
         "PYTHONUTF8": "1",
@@ -24,13 +30,26 @@ def start_worker(extra_env: dict | None = None, idle_exit: float = 10) -> subpro
         "MEET_WORKER_RETRY_BACKOFF_SECONDS": "0",
     }
     env.update(extra_env or {})
-    return subprocess.Popen(
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    err = open(LOG_DIR / f"{log_name}.err", "ab")
+    proc = subprocess.Popen(
         [sys.executable, "-m", "app.worker", "--idle-exit-seconds", str(idle_exit)],
         cwd=REPO_ROOT,
         env=env,
         stdout=subprocess.DEVNULL,  # 防止管道缓冲写满导致子进程阻塞
-        stderr=subprocess.DEVNULL,
+        stderr=err,
     )
+    proc._err_file = err
+    return proc
+
+
+def worker_log_tail(name: str = "worker", max_lines: int = 25) -> str:
+    """worker stderr 末尾若干行,用于失败信息附带 traceback。"""
+    p = LOG_DIR / f"{name}.err"
+    if not p.exists():
+        return "(无 worker stderr 日志)"
+    lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+    return "\n".join(lines[-max_lines:])
 
 
 def wait_job_status(job_id: int, statuses: set[str], timeout: float = 60) -> str:
@@ -46,7 +65,10 @@ def wait_job_status(job_id: int, statuses: set[str], timeout: float = 60) -> str
         if last in statuses:
             return last
         time.sleep(0.3)
-    raise AssertionError(f"等待任务状态 {statuses} 超时,最后状态: {last}")
+    raise AssertionError(
+        f"等待任务状态 {statuses} 超时,最后状态: {last}\n"
+        f"--- worker stderr 末尾 ---\n{worker_log_tail()}"
+    )
 
 
 def q(sql: str, **params):

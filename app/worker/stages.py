@@ -5,9 +5,10 @@
 - 每个阶段的所有业务产物与阶段成功状态在同一短事务提交(leased_transaction);
 - 执行器幂等:重复执行不产生重复版本/纪要/索引(对账 + 唯一约束);
 - 时间信息只来自切片边界(prepare 计算),模型不产生时间;
-- 外部调用经 _call_provider 包装:单次调用超时 + 阶段执行期限(deadline),
-  超时抛 ProviderResultUnknownError(结果未知),超期抛 StageDeadlineError
-  (可重试)——防止心跳活着但任务永久卡在外部调用上。
+- 外部调用经 _stage_call 统一入口:_call_provider 施加单次超时与阶段期限
+  (超时抛 ProviderResultUnknownError、超期抛 StageDeadlineError,均可重试),
+  再由 app.services.call_accounting 完成预算预留与 model_run 三态记账。
+  预算不足在发出调用前即失败,不产生模型调用。
 """
 import concurrent.futures as cf
 import hashlib
@@ -25,6 +26,7 @@ from app.ai.providers import (
     ProviderResultUnknownError,
     SegmentForLLM,
 )
+from app.services import call_accounting
 from app.services.minutes_validator import validate_minutes, MinutesValidationError
 from app.worker.lease import LeaseLostError, leased_transaction
 
@@ -96,6 +98,26 @@ def load_context(eng: Engine, job_id: int) -> JobContext:
     return JobContext(
         job_id=row[0], recording_id=row[1], meeting_id=row[2],
         org_id=row[3], file_path=row[4],
+    )
+
+
+def _stage_call(eng, ctx: JobContext, provider, *, stage: str, call: str,
+                units: dict, input_hash: str, fn, args,
+                provider_timeout: float = 60.0, deadline: float | None = None,
+                to_ref=None, prompt_version: str | None = None):
+    """阶段内的一次外部调用:期限前置检查 → 预算预留 → 发出 → 三态记账。
+
+    期限已耗尽时在**发出调用与写 model_run 之前**抛出,避免留下
+    "从未发出的 unknown 调用"这类失真留痕。
+    """
+    timeout = _call_timeout(provider_timeout, deadline)
+    if timeout is not None and timeout <= 0:
+        raise StageDeadlineError("阶段执行期限已耗尽,不再发出外部调用")
+    return call_accounting.billed_call(
+        eng, provider=provider, org_id=ctx.org_id, job_id=ctx.job_id,
+        stage=stage, call=call, units=units, input_hash=input_hash,
+        invoke=lambda: _call_provider(fn, timeout, *args),
+        to_ref=to_ref, prompt_version=prompt_version,
     )
 
 
@@ -263,25 +285,15 @@ def run_transcribe(eng, ctx: JobContext, epoch: int, asr: ASRProvider, should_ab
             out = cached[0]
         else:
             audio = _read_slice_audio(eng, ctx, slice_index)
-            # 两阶段记录:前置 unknown(结果未知),返回后补 succeeded;
-            # 超时/断连类异常保留 unknown(结果未知),明确失败才记 failed
-            run_id = _begin_model_run(
-                eng, ctx, stage="transcribe", provider=asr.name,
-                model_name=asr.model_name, input_hash=input_hash,
+            # 统一记账:预算预留 → 发出调用 → succeeded / failed / 保留 unknown
+            billed = _stage_call(
+                eng, ctx, asr, stage="transcribe", call="transcribe_slice",
+                units={"audio_bytes": len(audio)}, input_hash=input_hash,
+                fn=asr.transcribe_slice, args=(audio, slice_index),
+                provider_timeout=provider_timeout, deadline=deadline,
+                to_ref=lambda r: {"speaker": r.speaker, "text": r.text},
             )
-            try:
-                result = _call_provider(
-                    asr.transcribe_slice,
-                    _call_timeout(provider_timeout, deadline),
-                    audio, slice_index,
-                )
-            except ProviderResultUnknownError:
-                raise  # 结果未知:保留 unknown,重发时同键留痕
-            except Exception:
-                _fail_model_run(eng, run_id)
-                raise
-            out = {"speaker": result.speaker, "text": result.text}
-            _finish_model_run(eng, run_id, out)
+            out = {"speaker": billed.result.speaker, "text": billed.result.text}
         # 分片结果短事务提交(租约守卫)
         with leased_transaction(eng, ctx.job_id, epoch) as conn:
             conn.execute(
@@ -353,6 +365,21 @@ def _read_slice_audio(eng, ctx: JobContext, slice_index: int) -> bytes:
 
 # ---------- minutes ----------
 
+def _minutes_ref(draft) -> dict:
+    """纪要草稿的结构化留痕(既写 model_run.output_ref,也用于层1校验)。"""
+    return {
+        "items": [
+            {
+                "type": it.type, "text": it.text, "certainty": it.certainty,
+                "owner": it.owner, "due_date": it.due_date,
+                "evidence_segment_ids": it.evidence_segment_ids,
+                "needs_confirmation": it.needs_confirmation,
+            }
+            for it in draft.items
+        ]
+    }
+
+
 def run_minutes(eng, ctx: JobContext, epoch: int, llm: LLMProvider, should_abort,
                 provider_timeout: float = 60.0, deadline: float | None = None):
     """基于 active 转写版本生成结构化纪要(经层1校验),幂等。"""
@@ -391,36 +418,20 @@ def run_minutes(eng, ctx: JobContext, epoch: int, llm: LLMProvider, should_abort
     if cached is not None:
         run_id, content = cached[0], cached[1]
     else:
-        # 两阶段记录:前置 unknown(结果未知),返回后补 succeeded
-        run_id = _begin_model_run(
-            eng, ctx, stage="minutes", provider=llm.name,
-            model_name=llm.model_name, input_hash=input_hash,
-            prompt_version=llm.prompt_version,
+        payload = [
+            SegmentForLLM(segment_id=s[0], seq=s[1], speaker=s[2], text=s[3])
+            for s in segments
+        ]
+        billed = _stage_call(
+            eng, ctx, llm, stage="minutes", call="generate_minutes",
+            units={"segments": len(payload),
+                   "chars": sum(len(s.text) for s in payload)},
+            input_hash=input_hash,
+            fn=llm.generate_minutes, args=(payload,),
+            provider_timeout=provider_timeout, deadline=deadline,
+            prompt_version=llm.prompt_version, to_ref=_minutes_ref,
         )
-        try:
-            draft = _call_provider(
-                llm.generate_minutes,
-                _call_timeout(provider_timeout, deadline),
-                [SegmentForLLM(segment_id=s[0], seq=s[1], speaker=s[2], text=s[3])
-                 for s in segments],
-            )
-        except ProviderResultUnknownError:
-            raise  # 结果未知:保留 unknown
-        except Exception:
-            _fail_model_run(eng, run_id)
-            raise
-        content = {
-            "items": [
-                {
-                    "type": it.type, "text": it.text, "certainty": it.certainty,
-                    "owner": it.owner, "due_date": it.due_date,
-                    "evidence_segment_ids": it.evidence_segment_ids,
-                    "needs_confirmation": it.needs_confirmation,
-                }
-                for it in draft.items
-            ]
-        }
-        _finish_model_run(eng, run_id, content)
+        run_id, content = billed.record.run_id, _minutes_ref(billed.result)
 
     # 层1校验:引用存在 + 空值策略;失败则本阶段失败(不落库)
     try:
@@ -521,23 +532,15 @@ def run_index(eng, ctx: JobContext, epoch: int, embed: EmbedProvider, should_abo
         if cached is not None:
             vectors = [tuple(v) for v in cached[0]["vectors"]]
         else:
-            # 两阶段记录:前置 unknown(结果未知),返回后补 succeeded
-            run_id = _begin_model_run(
-                eng, ctx, stage="index", provider=embed.name,
-                model_name=embed.model_name, input_hash=input_hash,
+            billed = _stage_call(
+                eng, ctx, embed, stage="index", call="embed_batch",
+                units={"texts": len(texts),
+                       "chars": sum(len(t) for t in texts)},
+                input_hash=input_hash, fn=embed.embed_batch, args=(texts,),
+                provider_timeout=provider_timeout, deadline=deadline,
+                to_ref=lambda vecs: {"vectors": vecs},
             )
-            try:
-                vectors = _call_provider(
-                    embed.embed_batch,
-                    _call_timeout(provider_timeout, deadline),
-                    texts,
-                )
-            except ProviderResultUnknownError:
-                raise  # 结果未知:保留 unknown
-            except Exception:
-                _fail_model_run(eng, run_id)
-                raise
-            _finish_model_run(eng, run_id, {"vectors": vectors})
+            vectors = billed.result
         # 批量写入短事务(租约守卫);is_active=false,发布前检索不可见
         with leased_transaction(eng, ctx.job_id, epoch) as conn:
             for seg, vec in zip(batch, vectors):
@@ -591,52 +594,3 @@ def _chunks_for_version(eng, version_id: int):
             text("SELECT segment_id FROM embedding_chunk WHERE version_id = :v"),
             {"v": version_id},
         ).fetchall()
-
-
-def _begin_model_run(eng, ctx: JobContext, *, stage, provider, model_name,
-                     input_hash, prompt_version=None, is_mock=True) -> int:
-    """调用前置记录:status=unknown(调用即将发出,结果未知)。
-
-    进程死于此后的任意时刻,该行即为"结果未知的调用"审计证据——
-    重发是允许的(不宣称避免重复调用/计费),unknown 行如实留痕。
-    幂等键为服务商请求级去重键,同键可多行(每次物理调用一行)。
-    """
-    with eng.begin() as conn:
-        return conn.execute(
-            text(
-                "INSERT INTO model_run"
-                " (org_id, job_id, stage, provider, model_name, prompt_version,"
-                "  input_hash, status, is_mock, idempotency_key, idempotency_key_sent)"
-                " VALUES (:org, :job, :stage, :provider, :model, :pv, :ih,"
-                "  'unknown', :mock, :idem, false)"
-                " RETURNING id"
-            ),
-            {
-                "org": ctx.org_id, "job": ctx.job_id, "stage": stage,
-                "provider": provider, "model": model_name, "pv": prompt_version,
-                "ih": input_hash, "mock": is_mock,
-                "idem": f"org{ctx.org_id}-job{ctx.job_id}-{stage}-{input_hash}",
-            },
-        ).scalar()
-
-
-def _finish_model_run(eng, run_id: int, output_ref) -> None:
-    """调用成功:unknown → succeeded,写回输出(独立短事务)。"""
-    with eng.begin() as conn:
-        conn.execute(
-            text(
-                "UPDATE model_run SET status = 'succeeded',"
-                " output_ref = CAST(:out AS jsonb) WHERE id = :id"
-            ),
-            {"out": _to_json(output_ref), "id": run_id},
-        )
-
-
-def _fail_model_run(eng, run_id: int) -> None:
-    """调用明确失败(Provider 抛异常,结果确定):unknown → failed。
-    区别于 unknown(进程死亡,结果未知)。"""
-    with eng.begin() as conn:
-        conn.execute(
-            text("UPDATE model_run SET status = 'failed' WHERE id = :id"),
-            {"id": run_id},
-        )

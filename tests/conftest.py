@@ -158,6 +158,34 @@ def make_wav_bytes(seconds: float = 1.0, sample_rate: int = 8000) -> bytes:
     return buf.getvalue()
 
 
+# ---- 进程内驱动 worker 阶段的公共辅助(worker 子进程路径另有 e2e/恢复测试) ----
+
+def upload_recording(client, session, org, user, seconds: float = 25):
+    """建会谈 + 上传录音,返回 (meeting, job_id)。25s → 3 个分片。"""
+    meeting = make_meeting(session, org, user)
+    resp = client.post(
+        f"/meetings/{meeting.id}/recordings",
+        files={"file": (f"rec-{meeting.id}.wav",
+                        make_wav_bytes(seconds=seconds), "audio/wav")},
+        headers=auth_headers(client, user.username),
+    )
+    assert resp.status_code == 202, resp.text
+    return meeting, resp.json()["job_id"]
+
+
+def claim_and_load(job_id: int, ttl: int = 120):
+    """领取任务并装载阶段上下文,返回 (epoch, JobContext)。"""
+    from app.core.db import engine
+    from app.worker.lease import claim_job, read_lease, worker_id
+    from app.worker.stages import load_context
+
+    wid = worker_id()
+    claimed = claim_job(engine, wid, ttl_seconds=ttl)
+    assert claimed == job_id, f"应领取到 job {job_id},实际 {claimed}"
+    epoch, _ = read_lease(engine, job_id)
+    return epoch, load_context(engine, job_id)
+
+
 @pytest.fixture
 def two_orgs(session):
     """两个机构 × 各一管理员一普通用户,用于权限隔离测试。"""

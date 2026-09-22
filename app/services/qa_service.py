@@ -9,11 +9,14 @@
   不生成回答、不带引用;
 - 每次问答(无论是否充分)写 query_log 审计。
 """
+import hashlib
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.mock_providers import get_providers
 from app.ai.providers import QACandidate
+from app.ai.registry import build_providers
+from app.services import call_accounting
 from app.core.config import get_settings
 from app.models.meeting import Meeting
 from app.models.minutes import QueryLog
@@ -76,11 +79,30 @@ def retrieve_candidates(
 
 
 def ask_question(db: Session, user: User, meeting: Meeting, question: str) -> AnswerOut:
-    """完整问答流程(问题向量化与 LLM 为同步调用,见 config 注释)。"""
-    settings = get_settings()
-    _, llm, embed = get_providers()
+    """完整问答流程(问题向量化与 LLM 为同步调用,见 config 注释)。
 
-    question_vec = embed.embed_batch([question])[0]
+    这两次调用同样经 call_accounting:问答路径不记账的话,真实 Provider 的
+    费用与预算就只覆盖了后台流水线,用户侧调用会成了免费额度。
+    """
+    settings = get_settings()
+    _, llm, embed = build_providers()
+    eng = db.get_bind()
+
+    def _call(provider, stage, call, units, input_hash, invoke, to_ref=None):
+        return call_accounting.billed_call(
+            eng, provider=provider, org_id=user.org_id, job_id=None,
+            stage=stage, call=call, units=units, input_hash=input_hash,
+            invoke=invoke, to_ref=to_ref,
+            prompt_version=getattr(provider, "prompt_version", None),
+        )
+
+    question_hash = _sha(f"embed|{embed.model_name}|{question}")
+    billed_vec = _call(
+        embed, "qa", "embed_batch",
+        {"texts": 1, "chars": len(question)}, question_hash,
+        lambda: embed.embed_batch([question]),
+    )
+    question_vec = billed_vec.result[0]
     rows = retrieve_candidates(
         db, user, meeting.id, question_vec, settings.qa_top_k
     )
@@ -99,14 +121,14 @@ def ask_question(db: Session, user: User, meeting: Meeting, question: str) -> An
         #  >0=相关但焦点线索缺失)
         _log_query(
             db, user, question, rows, relevant=len(candidates),
-            answer=None, cited=[], sufficient=False,
+            answer=None, cited=[], sufficient=False, is_mock=llm.is_mock,
         )
         return AnswerOut(
             meeting_id=meeting.id,
             question=question,
             answer=None,
             has_sufficient_evidence=False,
-            is_mock=True,
+            is_mock=llm.is_mock,
             raw_retrieved_count=len(rows),
             relevant_candidate_count=len(candidates),
             citations=[],
@@ -122,7 +144,20 @@ def ask_question(db: Session, user: User, meeting: Meeting, question: str) -> An
         )
         for r, sim in candidates
     ]
-    result = llm.answer_question(question, qc)
+    # 每次问答都是真实外部调用:不做跨请求结果缓存(缓存按 job 隔离的约定
+    # 不适用于无 job 的问答路径,跨用户复用回答会绕过审计与计费口径)
+    answer_hash = _sha(
+        f"{llm.prompt_version}|{question}|"
+        + "|".join(f"{c.segment_id}:{c.text}" for c in qc)
+    )
+    billed_ans = _call(
+        llm, "qa", "answer_question",
+        {"candidates": len(qc), "question_chars": len(question),
+         "chars": len(question) + sum(len(c.text) for c in qc)}, answer_hash,
+        lambda: llm.answer_question(question, qc),
+        to_ref=lambda r: {"text": r.text, "cited": r.cited_segment_ids},
+    )
+    result = billed_ans.result
 
     # 充分性第二层(焦点线索启发式,mock):候选相关但问题询问的
     # 日期/负责人/时长线索缺失时,LLM 返回 text=None → 证据不足
@@ -142,6 +177,7 @@ def ask_question(db: Session, user: User, meeting: Meeting, question: str) -> An
     _log_query(
         db, user, question, rows, relevant=len(candidates),
         answer=result.text, cited=result.cited_segment_ids, sufficient=True,
+        is_mock=result.is_mock,
     )
     return AnswerOut(
         meeting_id=meeting.id,
@@ -161,7 +197,12 @@ def ask_question(db: Session, user: User, meeting: Meeting, question: str) -> An
     )
 
 
-def _log_query(db, user, question, rows, *, relevant, answer, cited, sufficient):
+def _sha(text_: str) -> str:
+    return hashlib.sha256(text_.encode("utf-8")).hexdigest()
+
+
+def _log_query(db, user, question, rows, *, relevant, answer, cited, sufficient,
+               is_mock):
     db.add(
         QueryLog(
             user_id=user.id,
@@ -171,7 +212,7 @@ def _log_query(db, user, question, rows, *, relevant, answer, cited, sufficient)
             answer=answer,
             cited_segment_ids=list(cited),
             has_sufficient_evidence=sufficient,
-            is_mock=True,
+            is_mock=is_mock,
         )
     )
     db.commit()
