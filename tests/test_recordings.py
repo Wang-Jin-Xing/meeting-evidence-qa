@@ -36,10 +36,16 @@ def test_upload_creates_queued_job_without_model_calls(client, session, two_orgs
         "prepare", "transcribe", "minutes", "index"
     ]
 
-    # 请求内不产生任何模型调用
+    # 请求内不产生任何模型调用(限定本 job;全表查询会受其他测试的
+    # worker 产物影响,依赖测试执行顺序)
     from sqlalchemy import select
     from app.models.model_run import ModelRun
-    assert session.scalars(select(ModelRun)).all() == []
+    assert (
+        session.scalars(
+            select(ModelRun).where(ModelRun.job_id == body["job_id"])
+        ).all()
+        == []
+    )
 
     # 文件已落盘且 checksum 与内容一致
     recording = session.get(Recording, body["recording_id"])

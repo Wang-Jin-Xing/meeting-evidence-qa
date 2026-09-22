@@ -24,6 +24,8 @@ from app.ai.providers import (
     LLMProvider,
     MinutesDraft,
     MinutesItemDraft,
+    QACandidate,
+    QAAnswer,
     SegmentForLLM,
 )
 from app.models.transcript import EMBEDDING_DIM
@@ -143,6 +145,48 @@ class MockLLM(LLMProvider):
                     )
                 )
         return MinutesDraft(items=items, is_mock=True)
+
+    def answer_question(self, question: str, candidates: list[QACandidate]) -> QAAnswer:
+        """mock 问答:焦点线索启发式 + 抽取式回答。
+
+        能力边界(如实声明):充分性判断是关键词启发式,不是语义理解——
+        仅检查问题焦点(负责人/时间点/时长)在候选原文中是否有对应线索,
+        无法验证线索与问题对象的对应关系(如把 X200 的日期当成 X300 的答案);
+        text=None 表示焦点线索缺失,判定证据不足以回答,不拼接候选冒充答案。
+        """
+        if _fail_on_call("QA"):
+            raise RuntimeError("[mock] 注入: QA 调用失败(第N次)")
+        if not self._has_focus_clue(question, candidates):
+            return QAAnswer(text=None, cited_segment_ids=[], is_mock=True)
+        parts = [f"{c.speaker or '未知发言者'}:{c.text}" for c in candidates]
+        text = "根据会谈转写记录:" + ";".join(parts)
+        return QAAnswer(
+            text=text,
+            cited_segment_ids=[c.segment_id for c in candidates],
+            is_mock=True,
+        )
+
+    @staticmethod
+    def _has_focus_clue(question: str, candidates: list[QACandidate]) -> bool:
+        """焦点线索启发式(确定性规则):
+        问负责人 → 候选须含"负责";问时间点 → 候选须含日期模式;
+        问时长 → 候选须含数字+时长单位(年/个月/天/周)。"""
+        import re
+
+        texts = [c.text for c in candidates]
+        if ("谁" in question or "负责人" in question) and not any(
+            "负责" in t for t in texts
+        ):
+            return False
+        if any(k in question for k in ("什么时候", "几号", "日期")) and not any(
+            _extract_date(t) for t in texts
+        ):
+            return False
+        if ("多久" in question or "多长" in question) and not any(
+            re.search(r"\d+(年|个月|天|周)", t) for t in texts
+        ):
+            return False
+        return True
 
 
 def _extract_date(text: str) -> str | None:

@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     # 音频切片时长(秒):切片边界即片段级时间信息来源
     slice_seconds: int = 10
 
+    # 检索问答(同步调用:问题向量化与 LLM 回答在请求内完成,
+    # mock 为本地确定性计算;"零模型调用"仅约束上传受理路径)
+    qa_top_k: int = 5
+    # 证据充分性阈值:候选余弦相似度 >= 阈值才可作为证据来源
+    # (mock 向量为字符 bigram,阈值按实测校准,见 docs/DECISIONS.md)
+    qa_evidence_threshold: float = 0.15
+
 
 @lru_cache
 def get_settings() -> Settings:
