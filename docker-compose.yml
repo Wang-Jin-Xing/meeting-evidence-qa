@@ -1,0 +1,21 @@
+# Phase 0: 仅数据库。统一 PostgreSQL(+pgvector),无 SQLite 降级。
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: mes-pg
+    environment:
+      POSTGRES_USER: mes
+      POSTGRES_PASSWORD: mes_dev_only   # 仅本地开发默认值,可被 .env 覆盖
+      POSTGRES_DB: meeting_evidence
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - mes_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mes -d meeting_evidence"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mes_pgdata:

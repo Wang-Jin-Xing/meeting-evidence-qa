@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 环境与密钥(禁止提交)
+.env
+*.pem
+*.key
+
+# 测试与缓存
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 运行时数据(不提交任何上传音频与产物)
+storage/
+
+# 前端(Phase 1 创建)
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
