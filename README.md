@@ -58,12 +58,35 @@ start http://127.0.0.1:8100/
 等待 readiness → 打印 worker 启动横幅与登录后 `/meta` 的生效值,
 用于核对"网页上传→持久化任务→独立 worker→结果展示"两侧配置一致。
 
+端口:由**命令行**决定,`scripts/dev_up.ps1 -Port 8100` 默认 **8100**(它把值传给
+`uvicorn --host/--port`;`.env` 里不再放端口,因为没有任何代码读取它,原先的
+`APP_PORT` 字段是无效配置,已删除)。若 8100 已被本机其他应用占用,换一个空闲端口即可,
+用 `curl http://127.0.0.1:<port>/health/ready` 确认起的是本项目(响应里
+`database: up`,首页标题为"会谈纪要与证据问答")。API 与 worker 是**两个独立进程**,
+模型组合与阈值一律以仓库根 `.env` 为准(终端里显式 `$env:` 设的同名变量优先级更高,
+只用于一次性覆盖,见下节),新开终端无需任何设置。
+
+在**管道化的父进程**里调用(CI、脚本捕获输出)时,请给一个不挂起的 stdin,
+否则脚本已打印完结果、调用方仍会一直等 EOF:API/worker 是常驻进程,会带着继承来的
+管道句柄活着。交互式 PowerShell 无此问题;自动化侧用
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev_up.ps1 < /dev/null`,
+或改为后台启动后自行轮询 `/health/ready`。
+
 ## 演示:数据重建与真实模型组合
 
 ```powershell
-# 重建两组虚构演示会谈(正常案例 / 边界案例)+ 演示账号,并逐个问题打印引用结果
-.\.venv\Scripts\python.exe demo/seed_demo.py --reset                 # 全 mock 组合
-$env:LLM_PROVIDER="deepseek"; .\.venv\Scripts\python.exe demo/seed_demo.py --reset   # 真实 LLM 组合
+# 重建两组虚构会谈(正常案例 / 边界案例)+ 演示账号,并逐个问题打印引用结果。
+# 模型组合默认取自 .env(本机已验证的真实组合),无需设环境变量。
+.\.venv\Scripts\python.exe demo/seed_demo.py --reset
+
+# 仅当要复现"全 mock"版本时才临时覆盖;$env: 只对**当前这个终端会话**里的
+# 后续命令生效,新开终端不继承 —— 因此长期配置一律写 .env,不要靠 $env: 记状态。
+# 阈值必须跟着 Embedding 模型走:mock bigram 的校准值是 0.15,沿用 .env 的 0.66
+# 会让 mock 检索全部落在阈值以下,看起来"没有引用"其实是配置错配(见 D-48)。
+$env:ASR_PROVIDER="mock"; $env:LLM_PROVIDER="mock"; $env:EMBED_PROVIDER="mock"
+$env:QA_EVIDENCE_THRESHOLD="0.15"
+.\.venv\Scripts\python.exe demo/seed_demo.py --reset
+Remove-Item Env:ASR_PROVIDER,Env:LLM_PROVIDER,Env:EMBED_PROVIDER,Env:QA_EVIDENCE_THRESHOLD
 ```
 
 演示账号(密码可用环境变量 `DEMO_PASSWORD` 覆盖,默认见 `demo/seed_demo.py`):

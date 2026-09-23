@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     # 无默认值 = 必须显式配置,测试据此拒绝在应用库上执行 TRUNCATE。
     test_database_url: str | None = None
 
-    # API 服务
-    app_host: str = "127.0.0.1"
-    app_port: int = 8000
+    # 监听地址/端口**不在这里配**:uvicorn 由命令行 --host/--port 决定
+    # (见 scripts/dev_up.ps1 的 -Port)。曾有的 app_host/app_port 字段无任何代码读取,
+    # 留着只会让人以为改 .env 就能换端口,故删除。
 
     # 模型服务:mock 为默认,真实适配器按 Provider 名注册(app/ai/registry.py)
     asr_provider: str = "mock"

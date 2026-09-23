@@ -12,6 +12,10 @@ if (-not (Test-Path "$root\.env")) {
 }
 New-Item -ItemType Directory -Force -Path "$root\.run" | Out-Null
 
+# 子进程 stdout 重定向到文件时,Python 默认用本地代码页(cp936)编码,
+# 中文横幅会变成 GBK 字节,交接方用 UTF-8 工具查看就是乱码、无法核对。
+$env:PYTHONUTF8 = "1"
+
 # 停掉本项目此前的 API / worker(按命令行匹配,不误伤其他 python 进程)
 Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Where-Object {
     $_.CommandLine -match 'app\.worker' -or $_.CommandLine -match 'uvicorn app\.main'

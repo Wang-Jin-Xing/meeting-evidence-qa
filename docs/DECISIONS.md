@@ -2,6 +2,29 @@
 
 按时间倒序追加。每条注明状态:设计/已实现/部分实现。
 
+## P3 配置来源统一与运行入口验收(2026-09-23)
+
+- **D-56 模型组合与阈值的唯一长期配置来源是仓库根 `.env`**:Provider 选择与
+  `QA_EVIDENCE_THRESHOLD` 由 `Settings` 读取(`os.environ` 优先于 `.env`,故临时
+  `$env:` 仍可覆盖),`demo/seed_demo.py` 不自行设 Provider 变量。因此 README 原先
+  `$env:LLM_PROVIDER="deepseek"; seed_demo.py --reset` 那行会让人以为"端口/组合要靠
+  每个终端各自设变量"——新开终端不继承,配置来源就此分裂。现 README 明确:
+  长期组合写 `.env`,演示默认即本机已验证的真实组合,`$env:` 只用于**一次性**复现
+  全 mock 版本,且必须同时把阈值降到 mock 校准值(mock bigram 实测相关 ~0.45 /
+  无关 ~0.06,见 D-48;沿用真实模型的 0.66 会让相关句全部落榜,表现为"有语料零引用")。
+  同类修正:端口原先在 `.env` 写作 `APP_HOST/APP_PORT`,但全仓库**无任何代码读取**
+  这两个字段(实际端口由 `uvicorn --host/--port` 决定,脚本 `-Port` 默认 8100),
+  属会误导的无效配置,已删除并在注释中指明真实来源,而不是"留着以后可能用"。已实现。
+- **D-57 常驻服务输出必须是 UTF-8 才能作为验收证据**:`dev_up.ps1` 把 API/worker
+  stdout 重定向到 `.run/*.out`,Python 对文件 stdout 按本地代码页(cp936)编码,
+  中文启动横幅落成 GBK 字节,交接方以 UTF-8 查看即乱码,**生效模型无法核对**。
+  脚本改为在启动子进程前设 `PYTHONUTF8=1`。同时记录两点实测边界:
+  (1) 管道化父进程调用 `dev_up.ps1` 会因常驻子进程继承 stdout 句柄而收不到 EOF
+  (脚本本身已跑完,服务也确实起来了),需 `< /dev/null` 或后台启动后轮询
+  `/health/ready`;(2) browser-use 的合成 `click` 未触达本界面的 submit/anchor
+  处理器,改用 `form.requestSubmit()` 与 `openMeeting(id)` 走同一处理器函数完成
+  登录与进入会谈 —— 验证的是真实前端代码路径,不是绕过界面直接打 API。已实现。
+
 ## P3 真实音频端到端(2026-09-23)
 
 - **D-52 耗时与设备随调用记账**:model_run 增加 `duration_ms` / `device`。
