@@ -3,6 +3,9 @@
 param([int]$Port = 8100)
 
 $ErrorActionPreference = "Stop"
+# PowerShell 5.1 的控制台编码跟随代码页(本机 cp936)。被重定向捕获时中文落成 GBK
+# 字节,交接方按 UTF-8 读就是乱码 —— 这里连同子进程一起固定为 UTF-8。
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 

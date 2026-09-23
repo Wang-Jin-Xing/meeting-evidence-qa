@@ -92,7 +92,17 @@ def test_asr_cost_is_local_zero_not_unknown():
     assert asr.estimate_cost("transcribe_slice", {"audio_bytes": 100}) == 0.0
     usage = asr.usage_for("transcribe_slice", {"audio_bytes": 100}, None)
     assert usage.basis == "estimated" and usage.cost_cents == 0.0
-    assert usage.tokens_in == 100
+    # 音频没有 token 口径:不得把字节数写进 tokens_in,否则与远程 LLM 的真 token
+    # 同列不同单位,台账一汇总就错(D-58)。留 NULL = "本次调用无 token 用量"。
+    assert usage.tokens_in is None and usage.tokens_out is None
+
+
+def test_embed_cost_is_local_zero_and_reports_no_token_usage():
+    embed = LocalBgeM3Embed(Settings())
+    assert embed.estimate_cost("embed_batch", {"texts": 3, "chars": 42}) == 0.0
+    usage = embed.usage_for("embed_batch", {"texts": 3, "chars": 42}, None)
+    assert usage.basis == "estimated" and usage.cost_cents == 0.0
+    assert usage.tokens_in is None, "批次数不是 token 数,不得冒充实测量"
 
 
 # ---------- Embedding ----------

@@ -24,6 +24,16 @@
   `/health/ready`;(2) browser-use 的合成 `click` 未触达本界面的 submit/anchor
   处理器,改用 `form.requestSubmit()` 与 `openMeeting(id)` 走同一处理器函数完成
   登录与进入会谈 —— 验证的是真实前端代码路径,不是绕过界面直接打 API。已实现。
+- **D-58 `tokens_in` 只放模型 token,本地 Provider 一律留 NULL**:台账实测暴露
+  `transcribe | faster-whisper | tokens_in=2880044` —— 一个 10 秒切片"288 万 token"。
+  根因是把 `units["audio_bytes"]` 直接写进 tokens_in,而 Embedding 侧写的是
+  `units["texts"]`(批内条数),同一列于是混了**字节 / 条数 / 真 token** 三种单位
+  (DeepSeek 的 335/358 才是 token)。任何按列汇总或跨阶段比较都会得出错误结论,
+  与"不编造指标"的口径冲突。现:两个本地 Provider 的 `usage_for` 返回
+  `tokens_in=None`(含义是"本次调用不存在 token 用量",不是 0,也不是未知失败),
+  成本口径不变(estimated 0 + duration_ms + device)。历史行(job ≤ 6)保留不改写,
+  以免抹掉当时的真实记录;批大小/音频量可由 `embedding_chunk` 行数与
+  `transcribe_slice` 的 start_ms/end_ms 还原。已实现(单测锁定两侧均为 None)。
 
 ## P3 真实音频端到端(2026-09-23)
 

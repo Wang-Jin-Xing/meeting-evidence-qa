@@ -51,9 +51,12 @@ class LocalBgeM3Embed(EmbedProvider):
         return 0.0
 
     def usage_for(self, call: str, units: dict, result) -> ProviderUsage | None:
-        texts = units.get("texts") or 0
+        """用量留 NULL:tokens 列只有"模型 token"一种语义,而本地 bge-m3 这次调用
+        没有任何按 token 计费的口径 —— 把 texts 条数塞进 tokens_in 会让台账里
+        "3" 和 DeepSeek 的"335 token"看起来同单位(D-58)。批大小不在此留痕,
+        但可由 embedding_chunk 行数还原;算力开销由 duration_ms + device 体现(D-52)。"""
         return ProviderUsage(basis="estimated", cost_cents=0.0,
-                             tokens_in=texts, tokens_out=None)
+                             tokens_in=None, tokens_out=None)
 
     # ---- 推理 ----
 

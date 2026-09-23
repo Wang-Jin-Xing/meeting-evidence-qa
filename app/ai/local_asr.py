@@ -83,8 +83,13 @@ class LocalWhisperASR(ASRProvider):
         return 0.0
 
     def usage_for(self, call: str, units: dict, result) -> ProviderUsage | None:
+        """用量留 NULL:音频按**字节/时长**计,不存在 token 口径(D-58)。
+        此前把 audio_bytes 写进 tokens_in,台账里就出现"10 秒切片 = 288 万 token"
+        这种与 DeepSeek 真 token 数同列不同单位的数据,任何汇总都会算错。
+        音频量仍可从 transcribe_slice 的 start_ms/end_ms 与原件大小还原,
+        本地算力开销由 duration_ms + device 体现(D-52)。"""
         return ProviderUsage(basis="estimated", cost_cents=0.0,
-                             tokens_in=units.get("audio_bytes"), tokens_out=None)
+                             tokens_in=None, tokens_out=None)
 
     # ---- 模型加载 ----
 
