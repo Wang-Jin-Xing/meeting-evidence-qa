@@ -18,6 +18,7 @@
 | 能力清单、关键取舍、真实实验数字、失败案例 | `PROJECT_SUMMARY.md` |
 | 面试问答与可当场展示的证据 | `INTERVIEW.md`、`docs/RESUME.md` |
 | 评测数据集与运行方式 | `eval/`(`python eval/run_eval.py`) |
+| 当前基线:五类分开的质量/耗时/成本口径与失败案例 | `docs/EVAL_BASELINE.md` |
 
 ## 技术栈
 
