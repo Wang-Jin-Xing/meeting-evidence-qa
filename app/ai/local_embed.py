@@ -36,12 +36,18 @@ class LocalBgeM3Embed(EmbedProvider):
         self.model_name = f"{settings.embed_model}(local)"
         self.device = settings.embed_device or "cpu"
         self.batch_size = settings.embed_batch_size
+        self.runtime_device = f"local:{self.device}"
         self._model = None
 
     # ---- 成本 ----
 
     def estimate_cost(self, call: str, units: dict) -> float | None:
-        return 0.0  # 本地推理无按次账单(不是"未知")
+        """0 = **外部 API 费用为零**,不代表计算成本为零(D-52)。
+
+        算力与电耗是真实的,故每次调用同时记录 duration_ms 与 device,
+        让"零账单"不被误读成"零成本"。
+        """
+        return 0.0
 
     def usage_for(self, call: str, units: dict, result) -> ProviderUsage | None:
         texts = units.get("texts") or 0

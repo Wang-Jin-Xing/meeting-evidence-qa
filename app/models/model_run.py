@@ -55,4 +55,9 @@ class ModelRun(Base):
     )
     tokens_in: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tokens_out: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 单次调用实际墙钟耗时与推理设备(D-52):本地模型外部 API 费用为 0,
+    # 但算力不是 0 —— 只记 cost 会把"零账单"误读成"零成本"。
+    # 两者由 Provider 自报或实测得到,未测量则为 NULL(不回填默认值)。
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    device: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

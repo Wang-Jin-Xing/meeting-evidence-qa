@@ -9,6 +9,7 @@ worker 四个阶段与问答(HTTP 请求内)都经此处,保证:
    cost_estimate 为 NULL 表示未知而非 0;结果未知的真实调用按预估**保守计为已用**
    (与"不宣称避免重复计费"一致:可能已计费的调用不能从账面消失)。
 """
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -27,6 +28,8 @@ class CallRecord:
     status: str
     cost_basis: str
     cost_cents: float | None
+    duration_ms: int | None = None
+    device: str | None = None
 
 
 @dataclass
@@ -85,38 +88,54 @@ def _resolve_cost(provider, call: str, units: dict, result, est: float | None):
 
 def _finish_succeeded(eng: Engine, run_id: int, output_ref, basis: str,
                       cents: float | None, tokens_in: int | None,
-                      tokens_out: int | None) -> None:
+                      tokens_out: int | None, duration_ms: int | None = None,
+                      device: str | None = None) -> None:
     with eng.begin() as conn:
         conn.execute(
             text(
                 "UPDATE model_run SET status = 'succeeded', output_ref = CAST(:out AS jsonb),"
                 " cost_basis = :basis, cost_estimate = :cents,"
-                " tokens_in = :ti, tokens_out = :to WHERE id = :id"
+                " tokens_in = :ti, tokens_out = :to,"
+                " duration_ms = :dur, device = :dev WHERE id = :id"
             ),
             {"out": _to_json(output_ref), "basis": basis, "cents": cents,
-             "ti": tokens_in, "to": tokens_out, "id": run_id},
+             "ti": tokens_in, "to": tokens_out, "dur": duration_ms,
+             "dev": device, "id": run_id},
         )
 
 
-def _finish_failed(eng: Engine, run_id: int) -> None:
+def _finish_failed(eng: Engine, run_id: int, duration_ms: int | None = None,
+                   device: str | None = None) -> None:
     """明确失败:结果确定 → failed,成本不计(未获得任何输出)。"""
     with eng.begin() as conn:
         conn.execute(
-            text("UPDATE model_run SET status = 'failed' WHERE id = :id"),
-            {"id": run_id},
+            text("UPDATE model_run SET status = 'failed', duration_ms = :dur,"
+                 " device = :dev WHERE id = :id"),
+            {"dur": duration_ms, "dev": device, "id": run_id},
         )
 
 
-def _finish_unknown_charged(eng: Engine, run_id: int, est: float | None) -> None:
-    """结果未知:status 保留 unknown;真实调用按预估保守计为已用(可能已计费)。"""
-    if est is None:
-        return  # 无价格口径:成本仍是 NULL(未知),由预算缺口规则拦截后续调用
-    basis = CostBasis.estimated.value
+def _finish_unknown_charged(eng: Engine, run_id: int, est: float | None,
+                            duration_ms: int | None = None,
+                            device: str | None = None) -> None:
+    """结果未知:status 保留 unknown;真实调用按预估保守计为已用(可能已计费)。
+
+    无论有没有价格口径,耗时与设备都照记 —— 这段等待确实发生了。
+    """
     with eng.begin() as conn:
+        if est is None:
+            # 无价格口径:成本仍是 NULL(未知),由预算缺口规则拦截后续调用
+            conn.execute(
+                text("UPDATE model_run SET duration_ms = :dur, device = :dev"
+                     " WHERE id = :id"),
+                {"dur": duration_ms, "dev": device, "id": run_id},
+            )
+            return
         conn.execute(
-            text("UPDATE model_run SET cost_basis = :basis, cost_estimate = :cents"
-                 " WHERE id = :id"),
-            {"basis": basis, "cents": est, "id": run_id},
+            text("UPDATE model_run SET cost_basis = :basis, cost_estimate = :cents,"
+                 " duration_ms = :dur, device = :dev WHERE id = :id"),
+            {"basis": CostBasis.estimated.value, "cents": est,
+             "dur": duration_ms, "dev": device, "id": run_id},
         )
 
 
@@ -136,23 +155,32 @@ def billed_call(eng: Engine, *, provider, org_id: int, job_id: int | None,
     run_id = _begin_run(eng, org_id=org_id, job_id=job_id, stage=stage,
                         provider=provider, call=call, input_hash=input_hash,
                         prompt_version=prompt_version)
+    # 设备由 Provider 自报;未声明就是 NULL(不猜、不填默认值)
+    device = getattr(provider, "runtime_device", None)
+    started = time.monotonic()
+
+    def elapsed_ms() -> int:
+        return int((time.monotonic() - started) * 1000)
+
     try:
         result = invoke()
     except ProviderResultUnknownError:
-        _finish_unknown_charged(eng, run_id, est)
+        _finish_unknown_charged(eng, run_id, est, elapsed_ms(), device)
         budget.settle(eng, org_id, held)
         raise
     except Exception:
-        _finish_failed(eng, run_id)
+        _finish_failed(eng, run_id, elapsed_ms(), device)
         budget.settle(eng, org_id, held)
         raise
 
+    duration = elapsed_ms()
     basis, cents, tokens_in, tokens_out = _resolve_cost(provider, call, units, result, est)
     _finish_succeeded(
         eng, run_id, to_ref(result) if to_ref else None, basis, cents,
-        tokens_in, tokens_out,
+        tokens_in, tokens_out, duration, device,
     )
     budget.settle(eng, org_id, held)
     return Billed(result=result, record=CallRecord(
         run_id=run_id, status="succeeded", cost_basis=basis, cost_cents=cents,
+        duration_ms=duration, device=device,
     ))

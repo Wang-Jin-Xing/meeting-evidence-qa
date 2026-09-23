@@ -19,7 +19,8 @@ class CitationOut(BaseModel):
     text: str
     start_ms: int | None
     end_ms: int | None
-    similarity: float  # 与问题的余弦相似度(1 - 余弦距离)
+    similarity: float
+    timestamp_precision: str | None = None  # 与问题的余弦相似度(1 - 余弦距离)
 
 
 class AnswerOut(BaseModel):

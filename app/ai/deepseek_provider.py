@@ -137,6 +137,7 @@ class DeepSeekLLM(LLMProvider):
         self._max_tokens = settings.deepseek_max_tokens
         self._price_in = settings.llm_price_per_1k_in
         self._price_out = settings.llm_price_per_1k_out
+        self.runtime_device = "remote:deepseek"
         self._last_usage: dict = {}
 
     # ---- 成本口径 ----

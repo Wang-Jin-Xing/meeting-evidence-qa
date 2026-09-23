@@ -18,6 +18,9 @@ class SegmentEvidenceOut(BaseModel):
     text: str
     start_ms: int | None
     end_ms: int | None
+    # 时间信息来源(如 segment_level_from_slice):界面必须显示精度,
+    # 不得把切片边界当成精确语音位置(D-53)
+    timestamp_precision: str | None = None
 
 
 class MinutesItemOut(BaseModel):

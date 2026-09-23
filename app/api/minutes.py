@@ -82,6 +82,8 @@ def get_meeting_minutes(
                 SegmentEvidenceOut(
                     segment_id=s.id, seq=s.seq, speaker=s.speaker,
                     text=s.text, start_ms=s.start_ms, end_ms=s.end_ms,
+                    timestamp_precision=(s.timestamp_precision.value
+                                         if s.timestamp_precision else None),
                 )
                 for s in (segments[sid] for sid in it.get("evidence_segment_ids", [])
                           if sid in segments)

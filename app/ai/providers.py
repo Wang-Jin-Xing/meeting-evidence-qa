@@ -74,6 +74,8 @@ class QACandidate:
     start_ms: int | None
     end_ms: int | None
     similarity: float  # 余弦相似度(1 - 余弦距离)
+    # 时间信息来源:切片边界 ≠ 精确语音位置,界面与引用必须带精度口径
+    timestamp_precision: str | None = None
 
 
 @dataclass
@@ -95,6 +97,9 @@ class _ProviderBase:
     name = "provider"
     model_name = "unknown"
     is_mock = False
+    # 推理发生在哪里:"cpu" / "cuda" / "remote:<厂商>" 等,由实现自报。
+    # None = 未声明(记账写 NULL,不猜设备)。见 D-52。
+    runtime_device: str | None = None
 
     def estimate_cost(self, call: str, units: dict) -> float | None:
         """发出调用前的费用预估(分)。None = 该 Provider 无价格口径。

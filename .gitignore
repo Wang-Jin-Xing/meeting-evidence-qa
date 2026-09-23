@@ -35,3 +35,6 @@ frontend/dist/
 
 # 交接包(Git bundle,仓库自身不能包含自己)
 handoff/
+
+# 数据库备份(含演示与真实录音数据,不入库)
+backups/

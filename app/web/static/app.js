@@ -266,15 +266,22 @@ async function loadMinutes() {
         <div class="sub">负责人:${esc(it.owner || "-")} · 截止:${esc(it.due_date || "-")}</div>
         <details><summary>证据 ${it.evidence.length} 条</summary>
           ${it.evidence.map((e) => `<div class="ev">
-            <b>SEG-${e.segment_id}</b> ${fmtTime(e.start_ms, e.end_ms)}
+            <b>SEG-${e.segment_id}</b> ${fmtTime(e.start_ms, e.end_ms, e.timestamp_precision)}
             ${esc(e.speaker || "未知")}:${esc(e.text)}</div>`).join("")}
         </details>
       </div>`).join("");
 }
 
-function fmtTime(a, b) {
+const PRECISION_LABEL = {
+  segment_level_from_slice: "切片范围,非精确语句定位",
+};
+
+function fmtTime(a, b, precision) {
   if (a === null || a === undefined) return "";
-  return `[${Math.floor(a / 1000)}s–${Math.floor((b || 0) / 1000)}s]`;
+  const range = `[${Math.floor(a / 1000)}s–${Math.floor((b || 0) / 1000)}s]`;
+  return precision
+    ? `${range} <span class="sub">(精度:${esc(PRECISION_LABEL[precision] || precision)})</span>`
+    : range;
 }
 
 /* ---------- 问答 ---------- */
@@ -298,7 +305,7 @@ document.getElementById("ask-form").addEventListener("submit", async (ev) => {
       <div class="text">${esc(r.answer)}</div>
       <div class="sub">候选 ${r.relevant_candidate_count} 条 · 引用 ${r.citations.length} 条</div>
       ${r.citations.map((c) => `<div class="ev"><b>SEG-${c.segment_id}</b>
-        ${fmtTime(c.start_ms, c.end_ms)} ${esc(c.speaker || "未知")}:${esc(c.text)}
+        ${fmtTime(c.start_ms, c.end_ms, c.timestamp_precision)} ${esc(c.speaker || "未知")}:${esc(c.text)}
         <span class="sub">相似度 ${c.similarity}</span></div>`).join("")}</div>`;
   } catch (e) { box.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 });

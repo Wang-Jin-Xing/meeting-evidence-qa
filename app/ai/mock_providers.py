@@ -163,6 +163,7 @@ class MockASR(ASRProvider):
     name = "mock-asr"
     model_name = "mock-asr-v1"
     is_mock = True  # 本地确定性实现,不产生真实费用
+    runtime_device = "local:mock-process"
 
     def transcribe_slice(self, audio: bytes, slice_index: int) -> ASRSlice:
         # 入口即记录(先于延迟/故障注入):证明本次调用确实发出
@@ -193,6 +194,7 @@ class MockLLM(LLMProvider):
     model_name = "mock-llm-rules-v1"
     prompt_version = "mock-rules-v1"
     is_mock = True
+    runtime_device = "local:mock-process"
 
     def generate_minutes(self, segments: list[SegmentForLLM]) -> MinutesDraft:
         _log_request("llm", "generate_minutes", segments=len(segments))
@@ -309,6 +311,7 @@ class MockEmbed(EmbedProvider):
     name = "mock-embed"
     model_name = "mock-embed-bigram-v1"
     is_mock = True
+    runtime_device = "local:mock-process"
     embedding_dim = EMBEDDING_DIM  # 与向量列同维度,工厂接入校验点(D-03)
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:

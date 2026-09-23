@@ -4,11 +4,13 @@
 自描述 WAV 解码、重采样、维度校验、成本口径与失败分类。
 """
 import io
+import re
 import wave
 
 import pytest
 
-from app.ai.local_asr import LocalWhisperASR, UnsupportedAudioError
+from app.ai.local_asr import (GLOSSARY_VERSION, INITIAL_PROMPT,
+                            LocalWhisperASR, UnsupportedAudioError)
 from app.ai.local_embed import EmbedDimensionMismatch, LocalBgeM3Embed
 from app.ai.providers import ASRSlice, ProviderUsage
 from app.ai.registry import REGISTRY, build, build_providers
@@ -143,3 +145,60 @@ def test_local_providers_build_no_model_at_construction_time():
 def test_registry_lists_local_and_mock_side_by_side():
     assert set(REGISTRY["asr"]) == {"mock", "whisper"}
     assert set(REGISTRY["embed"]) == {"mock", "bge-m3"}
+
+
+# ---------- 真实录音格式(24-bit/48k/立体声,实测样本) ----------
+
+def _wav(pcm: bytes, rate: int, ch: int, width: int) -> bytes:
+    import io as _io
+    import wave as _wave
+
+    buf = _io.BytesIO()
+    with _wave.open(buf, "wb") as w:
+        w.setnchannels(ch)
+        w.setsampwidth(width)
+        w.setframerate(rate)
+        w.writeframes(pcm)
+    return buf.getvalue()
+
+
+def test_decode_24bit_stereo_48k_to_16k_mono():
+    """实测录音为 24-bit/48k/立体声:解码后必须是 16k 单声道 float。"""
+    import numpy as np
+
+    n = 48000  # 1 秒
+    # 24-bit:0.5 满幅 ≈ 2^22;小端 3 字节
+    val = 1 << 22
+    b = bytes([val & 0xFF, (val >> 8) & 0xFF, (val >> 16) & 0xFF]) * (n * 2)
+    wav = _wav(b, 48000, 2, 3)
+    out = LocalWhisperASR._to_float32k(wav)
+    assert out.shape[0] == 16000, out.shape
+    assert abs(float(out[0]) - 0.5) < 1e-3, float(out[0])
+
+
+def test_decode_rejects_unverified_width():
+    import numpy as np
+
+    wav = _wav(b"\x01" * 8000, 8000, 1, 1)  # 8-bit 未验证
+    with pytest.raises(UnsupportedAudioError):
+        LocalWhisperASR._to_float32k(wav)
+
+
+def test_glossary_versioned_and_free_of_recording_specifics():
+    """词表护栏(D-54):版本化、且不含日期/金额/长句原文(防金标泄漏进提示词)。"""
+    from app.ai.local_asr import GLOSSARY_VERSION, INITIAL_PROMPT
+
+    assert GLOSSARY_VERSION
+    assert not re.search(r"\d{1,2}月\d{1,2}[日号]|\d{4}-\d{2}-\d{2}", INITIAL_PROMPT)
+    assert not re.search(r"\d+(?:\.\d+)?\s*(?:万|元|块)", INITIAL_PROMPT)
+    assert len(INITIAL_PROMPT) < 300, "词表应是短词表,不是原文"
+
+
+def test_transcribe_passes_glossary_and_records_version():
+    asr = LocalWhisperASR(Settings())
+    fake = _FakeWhisper()
+    asr._model = fake
+    asr.transcribe_slice(pcm_wav(seconds=1, rate=16000), 0)
+    assert fake.seen["kwargs"]["initial_prompt"] == INITIAL_PROMPT
+    assert asr.prompt_version == GLOSSARY_VERSION
+    assert asr.runtime_device.startswith("local:")

@@ -69,6 +69,24 @@ $env:LLM_PROVIDER="deepseek"; .\.venv\Scripts\python.exe demo/seed_demo.py --res
 | Embedding(检索) | **mock**(字符 bigram) | SiliconFlow `BAAI/bge-m3` 返回 402 账户余额不足,真实检索未接入 |
 | ASR(转写) | **mock** + 人工转写导入 | SiliconFlow `SenseVoiceSmall` 同样 402;演示以人工转写为权威文本来源 |
 
+### 真实录音端到端(本地 ASR + 本地 Embedding + DeepSeek)
+
+```powershell
+$env:ASR_PROVIDER="whisper"; $env:EMBED_PROVIDER="bge-m3"; $env:LLM_PROVIDER="deepseek"
+$env:QA_EVIDENCE_THRESHOLD="0.66"; $env:HF_ENDPOINT="https://hf-mirror.com"
+.\.venv\Scripts\python.exe demo/ingest_real_recording.py --audio "C:/.../会议录音.wav"     --questions demo/questions_real_meeting.json
+```
+
+脚本会:上传**原始文件**(24-bit/48k/立体声已实测支持)→ 进程内跑四阶段
+(真实 whisper,预算 300s)→ 逐问问答 → 把 ASR 原始输出(含错误,不修正)存
+`demo/corpus/<名>.asr.json`,报告存 `demo/verification/real_audio_<名>.json`
+(含音频参数、各阶段耗时与设备、引用与相似度、成本口径)。
+加 `--corrected 校对稿.json` 会另建一个隔离会谈发布校对版本做双链路对比,
+主展示会谈保持原始 ASR 不被替换。
+
+首轮实测(单样本,不代表整体准确率):识别错误如"布齐/北迅时间/没有报告"
+原样保留;实体问句 3/5 命中,2 问因识别错误导致证据不足(详见 D-55)。
+
 启用真实 Embedding(本地,无需任何密钥与余额):
 
 ```powershell

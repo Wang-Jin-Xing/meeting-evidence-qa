@@ -296,6 +296,8 @@ def run_transcribe(eng, ctx: JobContext, epoch: int, asr: ASRProvider, should_ab
                 units={"audio_bytes": len(audio)}, input_hash=input_hash,
                 fn=asr.transcribe_slice, args=(audio, slice_index),
                 provider_timeout=provider_timeout, deadline=deadline,
+                # 解码偏置词表版本随调用留痕(D-54):换词表即换 prompt_version
+                prompt_version=getattr(asr, "prompt_version", None),
                 to_ref=lambda r: {"speaker": r.speaker, "text": r.text},
             )
             out = {"speaker": billed.result.speaker, "text": billed.result.text}

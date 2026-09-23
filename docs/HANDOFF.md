@@ -77,7 +77,7 @@ $env:LLM_PROVIDER="deepseek"; .\.venv\Scripts\python.exe demo/seed_demo.py --res
 |---|---|---|
 | LLM | **真实** DeepSeek `deepseek-chat`(密钥来自环境变量 `DEEPSEEK_API_KEY`) | 已可用;tokens 为服务商口径,金额未配单价表 → `unknown` |
 | Embedding | **真实** 本地 `BAAI/bge-m3`(`EMBED_PROVIDER=bge-m3`) | 权重经 hf-mirror 下载;实测 1024 维 = 向量列;换模型必须重校准阈值(D-48) |
-| ASR | **本轮不启用**(仍 mock + 人工转写导入) | 云端 402;本地 `ASR_PROVIDER=whisper` 代码已就绪但实测中文专名错译明显(D-50),音频一律标注为静音占位 |
+| ASR | **真实** 本地 faster-whisper small/int8(`ASR_PROVIDER=whisper`) | 已在一段真实录音(立体声/24-bit/48k/28.86s)上端到端验证;识别错误原样保留(D-55);静音占位演示会谈仍标注为占位 |
 
 2026-09-23 实测:SiliconFlow 的 ASR 与 Embedding 接口返回
 `402 account balance insufficient`(账户余额不足),故本轮未接入。
@@ -136,6 +136,8 @@ top1 均命中证据句(相似度 0.71~0.82,无答案探针最高 0.55)——
 | 上传原件 | `storage/uploads/`(不入库,`.gitignore` 排除;需与导出配套保存) |
 | 评测报告 | `eval/reports/*.json`(运行时产物,`.gitignore` 排除;可重跑生成) |
 | 真实 Embedding 验证工件 | `demo/verification/real_embedding.json`(维度、索引重建不变量、dev 相似度分布、五项验证、model_run 台账) |
+| 真实音频链路工件 | `demo/verification/real_audio_会议录音.json` + `demo/corpus/会议录音.asr.json`(ASR 原始输出含错误) + `demo/questions_real_meeting.json` |
+| 应用库备份 | `backups/meeting_evidence_before_real_audio.sql`(加真实录音数据前) |
 | 语音合成脚本(ASR 备用) | `demo/make_demo_audio.py`(本机 TTS 合成 12 句 × 10s;本轮不用于演示) |
 | 密钥 | 只在 `.env` / 环境变量,**不进 Git**(`.env.example` 是模板) |
 
