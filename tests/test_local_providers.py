@@ -4,6 +4,7 @@
 自描述 WAV 解码、重采样、维度校验、成本口径与失败分类。
 """
 import io
+import os
 import re
 import wave
 
@@ -103,6 +104,29 @@ def test_embed_cost_is_local_zero_and_reports_no_token_usage():
     usage = embed.usage_for("embed_batch", {"texts": 3, "chars": 42}, None)
     assert usage.basis == "estimated" and usage.cost_cents == 0.0
     assert usage.tokens_in is None, "批次数不是 token 数,不得冒充实测量"
+
+
+def test_apply_hf_env_sets_both_and_keeps_existing(monkeypatch):
+    """.env 的值不进 os.environ,必须由 Provider 显式应用;已设的变量优先级更高。
+
+    回归的是静默回落:漏掉 HF_HOME 时权重会悄悄下到 C 盘默认目录(本机曾因此
+    在系统盘堆了 4.8GB),而不是报错。
+    """
+    from app.ai.providers import apply_hf_env
+
+    monkeypatch.delenv("HF_ENDPOINT", raising=False)
+    monkeypatch.delenv("HF_HOME", raising=False)
+    apply_hf_env("https://mirror.example", "D:/model-cache/huggingface")
+    assert os.environ["HF_ENDPOINT"] == "https://mirror.example"
+    assert os.environ["HF_HOME"] == "D:/model-cache/huggingface"
+
+    monkeypatch.setenv("HF_HOME", "E:/already-set")
+    apply_hf_env("https://mirror.example", "D:/model-cache/huggingface")
+    assert os.environ["HF_HOME"] == "E:/already-set", "终端显式设置必须优先于 .env"
+
+    monkeypatch.delenv("HF_HOME")
+    apply_hf_env("https://mirror.example", "")
+    assert "HF_HOME" not in os.environ, "留空 = 不干预,沿用库默认位置"
 
 
 # ---------- Embedding ----------

@@ -11,10 +11,9 @@
 - 模型**懒加载**:进程首次调用才加载,避免导入即占用数 GB 内存;
   同进程按模型 id 复用一份实例(API 与 worker 是不同进程,各自加载一次)。
 """
-import os
 import threading
 
-from app.ai.providers import EmbedProvider, ProviderUsage
+from app.ai.providers import EmbedProvider, ProviderUsage, apply_hf_env
 from app.core.config import Settings
 from app.models.transcript import EMBEDDING_DIM
 
@@ -38,6 +37,7 @@ class LocalBgeM3Embed(EmbedProvider):
         self.batch_size = settings.embed_batch_size
         self.runtime_device = f"local:{self.device}"
         self.hf_endpoint = settings.hf_endpoint
+        self.hf_home = settings.hf_home
         self._model = None
 
     # ---- 成本 ----
@@ -65,10 +65,8 @@ class LocalBgeM3Embed(EmbedProvider):
             return self._model
         with _LOCK:
             if self.model_id not in _CACHE:
-                # 直连 huggingface.co 在本机超时,默认走镜像(可被环境变量覆盖)
-                if self.hf_endpoint:
-                    # .env 的值不会自动进入 os.environ,故显式应用(已设则不覆盖)
-                    os.environ.setdefault("HF_ENDPOINT", self.hf_endpoint)
+                # 直连 huggingface.co 在本机超时,默认走镜像;权重目录同样由 .env 指定
+                apply_hf_env(self.hf_endpoint, self.hf_home)
                 from sentence_transformers import SentenceTransformer
 
                 _CACHE[self.model_id] = SentenceTransformer(

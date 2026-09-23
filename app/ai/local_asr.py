@@ -11,11 +11,10 @@
 - 成本:本地推理无按次账单 → 0 且口径 estimated(不等于没有算力/电耗)。
 """
 import io
-import os
 import threading
 import wave
 
-from app.ai.providers import ASRProvider, ASRSlice, ProviderUsage
+from app.ai.providers import ASRProvider, ASRSlice, ProviderUsage, apply_hf_env
 from app.core.config import Settings
 
 _CACHE: dict[tuple, object] = {}
@@ -74,6 +73,7 @@ class LocalWhisperASR(ASRProvider):
         self.model_name = f"faster-whisper:{self.model_size}@{self.compute_type}"
         self.runtime_device = f"local:{self.device}:{self.compute_type}"
         self.hf_endpoint = settings.hf_endpoint
+        self.hf_home = settings.hf_home
         self._model = None
 
     # ---- 成本 ----
@@ -99,9 +99,8 @@ class LocalWhisperASR(ASRProvider):
         with _LOCK:
             key = (self.model_size, self.device, self.compute_type)
             if key not in _CACHE:
-                if self.hf_endpoint:
-                    # .env 的值不会自动进入 os.environ,故显式应用(已设则不覆盖)
-                    os.environ.setdefault("HF_ENDPOINT", self.hf_endpoint)
+                # 镜像与权重目录都来自 .env;不设 HF_HOME 会默认落到 C 盘用户目录
+                apply_hf_env(self.hf_endpoint, self.hf_home)
                 from faster_whisper import WhisperModel
 
                 _CACHE[key] = WhisperModel(

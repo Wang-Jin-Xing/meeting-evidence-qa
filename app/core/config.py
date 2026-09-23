@@ -105,6 +105,10 @@ class Settings(BaseSettings):
     # 模型权重下载镜像:huggingface.co 直连在本机超时。
     # 注意 .env 的值不会自动进入 os.environ,故由 Provider 显式应用。
     hf_endpoint: str = "https://hf-mirror.com"
+    # 权重缓存目录。留空 = 用 HuggingFace 默认位置(Windows 下在 C 盘用户目录)。
+    # 本机 C 盘空间紧张且权重共约 4.8GB,故在 .env 指到 D 盘;不写死路径,
+    # 以免把这台机器的盘符带进代码库(见 .env.example 说明)。
+    hf_home: str = ""
 
     # 音频切片时长(秒):切片边界即片段级时间信息来源
     slice_seconds: int = 10

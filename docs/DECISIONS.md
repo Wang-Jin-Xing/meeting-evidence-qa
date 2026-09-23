@@ -4,6 +4,15 @@
 
 ## P3 配置来源统一与运行入口验收(2026-09-23)
 
+- **D-60 模型权重与包缓存必须显式指盘,否则静默写满系统盘**:huggingface_hub 只认
+  `HF_HOME`,而 `.env` 的值不进 `os.environ`,因此不设就一直往 `C:\Users\...\.cache` 里堆
+  —— 本机实测堆到 4.8GB 时 C 盘仅剩 8.1GB(97% 满),并连带把 Docker Desktop 引擎压到掉线
+  (`mes-pg` 变 Exited 255,测试直接连不上库)。现把权重目录纳入同一份 `.env`
+  (`HF_HOME`,代码不写死盘符),由 `apply_hf_env` 在加载前应用,与 `HF_ENDPOINT` 共用一个入口;
+  留空 = 不干预库默认。迁移经完整校验:复制到 `D:/model-cache/huggingface` 后 31 个文件
+  逐个 sha256 一致,再**改名**C 盘旧目录(可逆)并实测两个模型均从 D 加载、旧目录零新增写入,
+  确认无引用后才删除;pip 缓存同样 `pip cache purge` + `global.cache-dir` 指到 D。
+  C 盘可用从 8.1GB 回到 14GB。已实现(含回归测试:漏设会静默回落,已设的终端变量优先)。
 - **D-56 模型组合与阈值的唯一长期配置来源是仓库根 `.env`**:Provider 选择与
   `QA_EVIDENCE_THRESHOLD` 由 `Settings` 读取(`os.environ` 优先于 `.env`,故临时
   `$env:` 仍可覆盖),`demo/seed_demo.py` 不自行设 Provider 变量。因此 README 原先

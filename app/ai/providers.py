@@ -6,6 +6,22 @@ worker 只依赖这些接口;mock 与真实适配器(P3)分别实现。
 from dataclasses import dataclass, field
 
 
+def apply_hf_env(hf_endpoint: str, hf_home: str) -> None:
+    """把 `.env` 里的下载镜像与权重目录落到 os.environ(已设则不覆盖)。
+
+    pydantic-settings 只把 .env 读进 Settings 对象,不写 os.environ,
+    而 huggingface_hub 只认环境变量 —— 不在这里显式应用就会静默回落:
+    镜像没生效直连超时,或权重落到 C 盘默认目录把系统盘写满。
+    hf_home 为空 = 沿用 huggingface_hub 默认位置。
+    """
+    import os
+
+    if hf_endpoint:
+        os.environ.setdefault("HF_ENDPOINT", hf_endpoint)
+    if hf_home:
+        os.environ.setdefault("HF_HOME", hf_home)
+
+
 class ProviderResultUnknownError(Exception):
     """调用已发出但无法确认远端执行结果(超时/连接中断)。
 
