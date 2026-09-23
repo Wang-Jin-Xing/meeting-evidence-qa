@@ -98,6 +98,9 @@ DEMO = [
 # 外部机构账号:只用于验证跨机构访问被拒(不拥有任何会谈)
 OUTSIDER = {"org": "演示-外部医疗机构", "admin": "demo_outsider"}
 
+# 演示环境白名单:只有这些机构的数据允许被 --reset 清掉
+DEMO_ORG_NAMES = {d["org"] for d in DEMO} | {OUTSIDER["org"]}
+
 BUSINESS_TABLES = [
     "query_log", "embedding_chunk", "segment_mapping", "transcript_segment",
     "transcript_version", "minutes_version", "model_run", "job_stage",
@@ -131,8 +134,17 @@ def wav_bytes(seconds: float, rate: int = 8000) -> bytes:
     return buf.getvalue()
 
 
-def reset_database(db_name_check=True):
-    from sqlalchemy import text
+def reset_database(db_name_check=True, force=False):
+    """清空业务表,**仅限演示环境**。
+
+    两道闸:
+    1. 库名以 `_test` 结尾 → 拒绝(那是 pytest 的地盘);
+    2. 库里存在不属于演示机构的会谈 → 拒绝。
+       `--reset` 是 TRUNCATE 全表,而真实录音那几条验收会谈也在同一个应用库里,
+       不加这道闸,一条演示命令就会把不可重造的验收数据一起清掉。
+       确要清空时显式传 `--force`,并先自行备份。
+    """
+    from sqlalchemy import bindparam, text
 
     from app.core.db import engine
 
@@ -141,6 +153,24 @@ def reset_database(db_name_check=True):
     print(f"[seed] 目标数据库: {current}")
     if db_name_check and current.endswith("_test"):
         raise SystemExit("[seed] 拒绝在测试库上重建演示数据")
+
+    with engine.connect() as conn:
+        stmt = text(
+            "SELECT m.id, m.title FROM meeting m"
+            " JOIN organization o ON o.id = m.org_id"
+            " WHERE o.name NOT IN :names"
+        ).bindparams(bindparam("names", expanding=True))
+        foreign = conn.execute(stmt, {"names": sorted(DEMO_ORG_NAMES)}).all()
+    if foreign and not force:
+        sample = "; ".join(f"#{i} {t}" for i, t in foreign[:5])
+        raise SystemExit(
+            f"[seed] 拒绝执行:库 {current} 内有 {len(foreign)} 条**非演示**会谈"
+            f"(如 {sample})。--reset 会清空全部业务表,会连带删掉真实录音链路等"
+            f"不可重造的验收数据。确认要清空请备份后加 --force。"
+        )
+    if foreign:
+        print(f"[seed] --force 已给出:将连同 {len(foreign)} 条非演示会谈一起清空")
+
     quoted = ", ".join(f'"{t}"' for t in BUSINESS_TABLES)
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {quoted} RESTART IDENTITY CASCADE"))
@@ -300,10 +330,12 @@ def show_access_denied(client, session):
 def main():
     ap = argparse.ArgumentParser(description="重建演示数据并验证处理闭环")
     ap.add_argument("--reset", action="store_true", help="先清空业务表")
+    ap.add_argument("--force", action="store_true",
+                    help="配合 --reset:明知库里有非演示数据也照常清空(需先自行备份)")
     args = ap.parse_args()
 
     if args.reset:
-        reset_database()
+        reset_database(force=args.force)
 
     from fastapi.testclient import TestClient
 
