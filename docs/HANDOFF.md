@@ -154,6 +154,13 @@ docker exec -i mes-pg psql -U mes -d meeting_evidence_restore -q < demo/db_expor
 19 条模型调用记录,中文与向量均完整);`recording.file_path` 指向的原始音频
 在 `storage/uploads/`,需与导出配套放回。
 
+**该导出不含真实录音那几条会谈**(#4 主展示 / #5 入口验收 / #6 入口验收复跑),
+也没有把 `会议录音.wav` 放进仓库:它是我自己/你的会议内容,一旦提交就等于把
+原始语音与其中的日期、金额写进版本库。复现这几条要原件在手
+(sha256 前 16 位 `207e189720932974`,8311724 字节,立体声 / 24-bit / 48kHz),
+再跑 `python demo/ingest_real_recording.py`(或按 `entry_acceptance_job6.json`
+里记的入口路径在网页上传)。工件里只留转写文本、相似度与台账数字。
+
 ## 9. 实测评测记录(2026-09-23,可复跑)
 
 `eval/reports_sample/` 三份报告(同一 dev/test 数据集,各 6 题 + 权限探针):
