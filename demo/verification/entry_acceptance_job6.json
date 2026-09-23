@@ -1,0 +1,166 @@
+{
+  "title": "应用入口验收: 网页上传 → 持久化任务 → 独立 worker → 结果展示",
+  "generated_at": "2026-09-23T13:22:25",
+  "git_rev": "8a9fd30",
+  "worktree_dirty": false,
+  "database": "meeting_evidence",
+  "config_source": "仓库根 .env(API 与 worker 各自独立读取,终端不设任何 $env:)",
+  "effective_providers_both_sides": {
+    "worker_banner": "asr=faster-whisper:small@int8(mock=False) | llm=deepseek-chat(mock=False) | embed=BAAI/bge-m3(local)(mock=False)",
+    "api_meta": {
+      "asr": "faster-whisper:small@int8",
+      "llm": "deepseek-chat",
+      "embed": "BAAI/bge-m3(local)",
+      "embed_dim": 1024,
+      "all_mock": false,
+      "evidence_threshold": 0.66
+    }
+  },
+  "how_driven": {
+    "upload": "浏览器 file input 选入桌面原件 会议录音.wav(8311724 B, sha256 前16位 207e189720932974),由 #btn-upload 的点击处理器发 POST /meetings/6/recordings",
+    "caveat": "browser-use 的合成 click 未触达本界面的 submit/anchor 处理器,登录与进入会谈改用 form.requestSubmit() 与 openMeeting(id) —— 调用的仍是同一处理器函数,不是绕开前端直打 API",
+    "not_this_run": "本次不执行任何进程内管线;转写/纪要/索引全部由 python -m app.worker 独立进程完成"
+  },
+  "job": {
+    "id": 6,
+    "meeting_id": 6,
+    "status": "succeeded",
+    "lease_epoch": 1,
+    "locked_by": "a5e1a09f@b2cb",
+    "attempts": 1,
+    "created_at": "2026-09-23 05:09:59",
+    "last_update": "2026-09-23 05:10:36",
+    "note": "locked_by 是 worker 进程自报的持有者标识;API 进程不执行任何阶段"
+  },
+  "stages": [
+    {
+      "stage": "prepare",
+      "status": "succeeded",
+      "started_at": "(NULL)",
+      "finished_at": "2026-09-23 05:09:59.931",
+      "seconds_since_previous_stage_finished": 0.93
+    },
+    {
+      "stage": "transcribe",
+      "status": "succeeded",
+      "started_at": "(NULL)",
+      "finished_at": "2026-09-23 05:10:09.406",
+      "seconds_since_previous_stage_finished": 9.47
+    },
+    {
+      "stage": "minutes",
+      "status": "succeeded",
+      "started_at": "(NULL)",
+      "finished_at": "2026-09-23 05:10:11.054",
+      "seconds_since_previous_stage_finished": 1.65
+    },
+    {
+      "stage": "index",
+      "status": "succeeded",
+      "started_at": "(NULL)",
+      "finished_at": "2026-09-23 05:10:36.004",
+      "seconds_since_previous_stage_finished": 24.95
+    }
+  ],
+  "model_run_ledger": [
+    {
+      "stage": "transcribe",
+      "model": "faster-whisper:small@int8",
+      "status": "succeeded",
+      "cost_basis": "estimated",
+      "cost": "0.000000",
+      "tokens": "2880044/NULL",
+      "duration_ms": "5795",
+      "device": "local:cpu:int8",
+      "prompt_version": "zh-medproc-v1"
+    },
+    {
+      "stage": "transcribe",
+      "model": "faster-whisper:small@int8",
+      "status": "succeeded",
+      "cost_basis": "estimated",
+      "cost": "0.000000",
+      "tokens": "2880044/NULL",
+      "duration_ms": "1859",
+      "device": "local:cpu:int8",
+      "prompt_version": "zh-medproc-v1"
+    },
+    {
+      "stage": "transcribe",
+      "model": "faster-whisper:small@int8",
+      "status": "succeeded",
+      "cost_basis": "estimated",
+      "cost": "0.000000",
+      "tokens": "2551724/NULL",
+      "duration_ms": "1686",
+      "device": "local:cpu:int8",
+      "prompt_version": "zh-medproc-v1"
+    },
+    {
+      "stage": "minutes",
+      "model": "deepseek-chat",
+      "status": "succeeded",
+      "cost_basis": "unknown",
+      "cost": "NULL",
+      "tokens": "335/358",
+      "duration_ms": "1608",
+      "device": "remote:deepseek",
+      "prompt_version": "deepseek-meetings-v1"
+    },
+    {
+      "stage": "index",
+      "model": "BAAI/bge-m3(local)",
+      "status": "succeeded",
+      "cost_basis": "estimated",
+      "cost": "0.000000",
+      "tokens": "3/NULL",
+      "duration_ms": "24702",
+      "device": "local:cpu",
+      "prompt_version": "-"
+    }
+  ],
+  "transcript_slices_verbatim_from_asr": [
+    {
+      "seq": 1,
+      "start_ms": 0,
+      "end_ms": 10000,
+      "text": "〔真实会议录音原文:未公开〕",
+      "timestamp_precision": "segment_level_from_slice"
+    },
+    {
+      "seq": 2,
+      "start_ms": 10000,
+      "end_ms": 20000,
+      "text": "〔真实会议录音原文:未公开〕",
+      "timestamp_precision": "segment_level_from_slice"
+    },
+    {
+      "seq": 3,
+      "start_ms": 20000,
+      "end_ms": 28860,
+      "text": "〔真实会议录音原文:未公开〕",
+      "timestamp_precision": "segment_level_from_slice"
+    }
+  ],
+  "ui_rendered_answer": {
+    "question": "Y500的价格是多少?",
+    "answer_text": "〔真实会议录音原文:未公开〕",
+    "badge": "回答模型 真实",
+    "counts": "候选 1 条 · 引用 1 条",
+    "citation": "SEG-60 [10s–20s] (精度:切片范围,非精确语句定位) 未知:〔真实会议录音原文:未公开〕 相似度 0.746679",
+    "observation": "引用文本包含否定限定语「这个价格不适用于外国人」,但本次回答把它省略了;同一问题在会谈 #5 的回答里该限定语是出现的。属生成侧不稳定,如实记录,不据此外推准确率。"
+  },
+  "known_limits": [
+    "阶段级耗时不可得:job_stage.started_at 未落库,只能给阶段完成间隔(见 timing_note)。",
+    "单条录音、单次运行,不构成任何准确率指标",
+    "首次问答含 bge-m3 冷加载 31.2s,不代表稳态时延",
+    "DeepSeek 无单价表 → 纪要/问答成本 cost_basis=unknown 且金额为 NULL,不按 0 计",
+    "历史 model_run 行(job≤6)的 tokens_in 仍带 D-58 之前的错误单位,汇总需排除本地行"
+  ],
+  "timing_note": "job_stage.started_at 在实现里没有写入(全部为 NULL),所以**给不出每个阶段自身的执行时长**;上表 seconds_since_previous_stage_finished 是相邻阶段 finished_at 之间的间隔(首阶段以建任务时间为基准),反映的是完成节奏,不是阶段耗时,两者不可混用。单次模型调用的真实时长见 model_run.duration_ms。",
+  "end_to_end": {
+    "upload_accepted_at": "2026-09-23 05:09:59",
+    "index_finished_at": "2026-09-23 05:10:36.004",
+    "accept_to_indexed_seconds": 37.0
+  }
+}
