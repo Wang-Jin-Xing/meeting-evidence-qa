@@ -4,30 +4,6 @@
 
 ## P3 配置来源统一与运行入口验收(2026-09-23)
 
-- **D-60 模型权重与包缓存必须显式指盘,否则静默写满系统盘**:huggingface_hub 只认
-  `HF_HOME`,而 `.env` 的值不进 `os.environ`,因此不设就一直往 `C:\Users\...\.cache` 里堆
-  —— 本机实测堆到 4.8GB 时 C 盘仅剩 8.1GB(97% 满),并连带把 Docker Desktop 引擎压到掉线
-  (`mes-pg` 变 Exited 255,测试直接连不上库)。现把权重目录纳入同一份 `.env`
-  (`HF_HOME`,代码不写死盘符),由 `apply_hf_env` 在加载前应用,与 `HF_ENDPOINT` 共用一个入口;
-  留空 = 不干预库默认。迁移经完整校验:复制到 `D:/model-cache/huggingface` 后 31 个文件
-  逐个 sha256 一致,再**改名**C 盘旧目录(可逆)并实测两个模型均从 D 加载、旧目录零新增写入,
-  确认无引用后才删除;pip 缓存同样 `pip cache purge` + `global.cache-dir` 指到 D。
-  C 盘可用从 8.1GB 回到 14GB。已实现(含回归测试:漏设会静默回落,已设的终端变量优先)。
-- **D-61 证据回放:音频只走鉴权接口,24-bit 降位走派生副本**:新增
-  `GET /recordings/{id}/audio`(权限复用 `visible_meeting_condition`,无权与不存在都 404;
-  单区间 Range → 206/416;`Cache-Control: private, no-store`)。三个刻意的选择:
-  (1) **不把令牌放进 URL**:`<audio>` 发不出 Authorization 头,用 URL 查询参数带 JWT 会
-  把令牌落进浏览器历史与访问日志,因此界面用带鉴权的 fetch 取字节 → `blob:` URL 播放;
-  (2) **不改原件**:浏览器普遍不放 24-bit WAV(本项目真实录音就是 24-bit/48k/立体声),
-  服务端按 checksum 另存 16-bit 副本,写完立刻复核**帧数/采样率/声道与原件一致**
-  (不一致就删副本并报错)——时间轴对得上,切片起止毫秒才不会错位;
-  (3) **只播被引用的那一段**:界面按引用 `start_ms/end_ms` 定位并到点自动停
-  (实测 10s→20.19s 停、20s→28.86s 停,`duration=28.86` 与原件一致),
-  同时保留"切片范围,非精确语句定位"口径,不暗示精确到字。
-  引用与纪要证据新增 `recording_id`(没有它就不知道该播哪条录音),并断言
-  引用所属录音必须在被问会谈名下。已知边界:整条 blob 进内存,超大会话录音需改成
-  流式或签名短链(未做,记入限制)。已实现(8 条新测试:鉴权/跨机构/restricted 白名单/
-  Range/416/24-bit 时间轴/静态目录不暴露)。
 - **D-56 模型组合与阈值的唯一长期配置来源是仓库根 `.env`**:Provider 选择与
   `QA_EVIDENCE_THRESHOLD` 由 `Settings` 读取(`os.environ` 优先于 `.env`,故临时
   `$env:` 仍可覆盖),`demo/seed_demo.py` 不自行设 Provider 变量。因此 README 原先
@@ -76,6 +52,46 @@
   逐题归因只到"该题文本/排序/阈值哪一层"的级别,未做逐字消融,
   **不把整段校对的收益归因于某一个错字**。已实现(数据在
   `demo/verification/real_audio_会议录音.json` 的 `comparison.similarity_before_threshold`)。
+
+- **D-60 模型权重与包缓存必须显式指盘,否则静默写满系统盘**:huggingface_hub 只认
+  `HF_HOME`,而 `.env` 的值不进 `os.environ`,因此不设就一直往 `C:\Users\...\.cache` 里堆
+  —— 本机实测堆到 4.8GB 时 C 盘仅剩 8.1GB(97% 满),并连带把 Docker Desktop 引擎压到掉线
+  (`mes-pg` 变 Exited 255,测试直接连不上库)。现把权重目录纳入同一份 `.env`
+  (`HF_HOME`,代码不写死盘符),由 `apply_hf_env` 在加载前应用,与 `HF_ENDPOINT` 共用一个入口;
+  留空 = 不干预库默认。迁移经完整校验:复制到 `D:/model-cache/huggingface` 后 31 个文件
+  逐个 sha256 一致,再**改名**C 盘旧目录(可逆)并实测两个模型均从 D 加载、旧目录零新增写入,
+  确认无引用后才删除;pip 缓存同样 `pip cache purge` + `global.cache-dir` 指到 D。
+  C 盘可用从 8.1GB 回到 14GB。已实现(含回归测试:漏设会静默回落,已设的终端变量优先)。
+- **D-61 证据回放:音频只走鉴权接口,24-bit 降位走派生副本**:新增
+  `GET /recordings/{id}/audio`(权限复用 `visible_meeting_condition`,无权与不存在都 404;
+  单区间 Range → 206/416;`Cache-Control: private, no-store`)。三个刻意的选择:
+  (1) **不把令牌放进 URL**:`<audio>` 发不出 Authorization 头,用 URL 查询参数带 JWT 会
+  把令牌落进浏览器历史与访问日志,因此界面用带鉴权的 fetch 取字节 → `blob:` URL 播放;
+  (2) **不改原件**:浏览器普遍不放 24-bit WAV(本项目真实录音就是 24-bit/48k/立体声),
+  服务端按 checksum 另存 16-bit 副本,写完立刻复核**帧数/采样率/声道与原件一致**
+  (不一致就删副本并报错)——时间轴对得上,切片起止毫秒才不会错位;
+  (3) **只播被引用的那一段**:界面按引用 `start_ms/end_ms` 定位并到点自动停
+  (实测 10s→20.19s 停、20s→28.86s 停,`duration=28.86` 与原件一致),
+  同时保留"切片范围,非精确语句定位"口径,不暗示精确到字。
+  引用与纪要证据新增 `recording_id`(没有它就不知道该播哪条录音),并断言
+  引用所属录音必须在被问会谈名下。已知边界:整条 blob 进内存,超大会话录音需改成
+  流式或签名短链(未做,记入限制)。已实现(8 条新测试:鉴权/跨机构/restricted 白名单/
+  Range/416/24-bit 时间轴/静态目录不暴露)。
+- **D-62 纪要人工流转:确认写在版本行上,编辑必须声明基版本**:新增
+  `POST /meetings/{id}/minutes/versions`(追加 `human_edit` 版本)与
+  `POST /meetings/{id}/minutes/confirm`(确认指定版本),`minutes_version` 加
+  `confirmed_by` / `confirmed_at`(迁移 `b7e4d2a91c58`,**可空且不回填** —— 历史上没被
+  确认过就是没被确认过)。三条规则:
+  (1) AI 草稿行永不改写,编辑走 `parent_version_id` 记血缘,历史版次完整可读;
+  (2) 确认不挂在会谈上而挂在版本上:编辑出的新版本一律回到 `pending_review`,
+  否则"上一轮谁确认过"会被误当成"这一轮内容也确认了",等同于替人背书他没看过的内容;
+  (3) 并发用**声明基版本**而不是时间戳:提交的 `base_version_id` 不是最新版 →
+  409 并告知当前最新版的版本号,让人先看到有人在他之后改过;基版本行用
+  `SELECT ... FOR UPDATE` 串行化,避免两个"都以为自己是第二个"同时写入。
+  人工编辑**不豁免**任何校验:引用必须属本会谈(跨会谈片段引用被拒),
+  decision/todo 缺负责人/截止日期必须显式标 `needs_confirmation`,与 AI 草稿同一口径。
+  已实现(6 条测试:追加不改写原版、按版本确认且新版需重确认、重复确认幂等、
+  陈旧基版本 409 且版本序列未被写坏、引用与空值校验、跨机构与 restricted 越权)。
 
 ## P3 真实音频端到端(2026-09-23)
 

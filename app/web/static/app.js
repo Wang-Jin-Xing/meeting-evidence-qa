@@ -293,7 +293,68 @@ async function loadMinutes() {
             ${esc(e.speaker || "未知")}:${esc(e.text)}</div>`).join("")}
         </details>
       </div>`).join("");
+  renderMinutesActions(m);
 }
+
+/* 纪要的人工流转:确认只作用于"当前这一版",编辑追加新版本并回到待确认 */
+function renderMinutesActions(m) {
+  const el = document.getElementById("minutes-actions");
+  const confirmed = m.status === "confirmed";
+  const at = m.confirmed_at ? String(m.confirmed_at).replace("T", " ").slice(0, 19) : "";
+  el.innerHTML = `
+    <div class="sub">本版(v${m.version_no})确认状态:${confirmed
+      ? `已确认 · 确认人 #${esc(String(m.confirmed_by))} · ${esc(at)}`
+      : "未确认(等待人工确认)"}
+    </div>
+    <button id="btn-confirm-minutes" ${confirmed ? "disabled" : ""}>
+      ${confirmed ? "此版本已确认" : "确认此版本"}</button>
+    <button id="btn-edit-minutes">编辑为新版</button>
+    <details><summary>历史版本 ${m.versions.length} 个</summary>
+      <ul>${m.versions.map((v) => `<li>v${v.version_no} · ${esc(v.source_type)} ·
+        ${esc(v.status)}${v.confirmed_by ? " · 确认人 #" + esc(String(v.confirmed_by)) : ""}
+      </li>`).join("")}</ul>
+    </details>`;
+
+  document.getElementById("btn-confirm-minutes").onclick = async () => {
+    try {
+      await api(`/meetings/${state.meetingId}/minutes/confirm`,
+        { method: "POST", json: { version_id: m.id } });
+      toast(`已确认 v${m.version_no}`);
+      await loadMinutes();
+    } catch (e) { toast(e.message, true); }
+  };
+
+  const panel = document.getElementById("minutes-edit");
+  document.getElementById("btn-edit-minutes").onclick = () => {
+    panel.classList.toggle("hidden");
+    if (!panel.classList.contains("hidden")) {
+      // 基版本记在 data-base 上:提交时若已不是最新版,服务端会拒绝而非覆盖
+      panel.dataset.base = m.id;
+      document.getElementById("minutes-json").value =
+        JSON.stringify(m.content, null, 2);
+    }
+  };
+}
+
+document.getElementById("btn-minutes-save").addEventListener("click", async () => {
+  const out = document.getElementById("minutes-edit-result");
+  let parsed;
+  try {
+    parsed = JSON.parse(document.getElementById("minutes-json").value);
+  } catch (e) { out.innerHTML = `<div class="err">JSON 不合法:${esc(e.message)}</div>`; return; }
+  const base = Number(document.getElementById("minutes-edit").dataset.base);
+  out.innerHTML = '<span class="hint">提交中…</span>';
+  try {
+    const v = await api(`/meetings/${state.meetingId}/minutes/versions`, {
+      method: "POST", json: { base_version_id: base, content: parsed },
+    });
+    out.innerHTML = `<div class="hint">已追加 v${v.version_no}(${esc(v.source_type)},`
+      + `${esc(v.status)})。AI 原版与既往版本均未改写;这一版需要重新确认。</div>`;
+    await loadMinutes();
+  } catch (e) {
+    out.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  }
+});
 
 const PRECISION_LABEL = {
   segment_level_from_slice: "切片范围,非精确语句定位",

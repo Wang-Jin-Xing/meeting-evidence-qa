@@ -42,7 +42,7 @@ class MinutesContentOut(BaseModel):
 
 
 class MinutesVersionBrief(BaseModel):
-    """版本摘要(完整内容仅最新版返回)。"""
+    """版本摘要(完整内容仅最新版返回)。确认信息逐版本给出,不按会谈推断。"""
 
     model_config = {"from_attributes": True}
 
@@ -51,6 +51,9 @@ class MinutesVersionBrief(BaseModel):
     source_type: str
     status: str
     created_at: datetime
+    created_by: int | None = None
+    confirmed_by: int | None = None
+    confirmed_at: datetime | None = None
 
 
 class MinutesDetailOut(BaseModel):
@@ -62,5 +65,25 @@ class MinutesDetailOut(BaseModel):
     source_type: str
     status: str
     created_at: datetime
+    created_by: int | None = None
+    confirmed_by: int | None = None
+    confirmed_at: datetime | None = None
     content: MinutesContentOut
     versions: list[MinutesVersionBrief]
+
+
+class MinutesEditIn(BaseModel):
+    """人工修订:必须声明基于哪一版(并发保护),内容仍走服务端校验。
+
+    校验口径与 AI 草稿完全一致(引用可解析、decision/todo 必须带证据、
+    负责人/日期缺失须标 needs_confirmation)——不因"是人工编辑"就跳过规则。
+    """
+
+    base_version_id: int
+    content: dict
+
+
+class MinutesConfirmIn(BaseModel):
+    """确认针对具体版本;界面必须把要确认的 version_id 传上来。"""
+
+    version_id: int

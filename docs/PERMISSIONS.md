@@ -16,6 +16,8 @@
 | 音频回放 | `GET /recordings/{id}/audio` | 经录音→会谈 join 可见性条件(org 等值 + 可见会谈子查询),无权/不存在统一 404(不给录音 ID 探测留信号);`restricted` 需白名单,同机构未授权也 404;支持单区间 Range(206/416);响应 `Cache-Control: private, no-store`;**storage/ 不在任何静态挂载下,音频只能经本接口取** |
 | 检索问答 | `POST /meetings/{id}/ask` | 三重条件:① 会谈访问检查(404);② 候选 SQL 显式 `meeting_id = URL 会谈`;③ 候选 SQL 权限注入(org_id 等值 + 可见会谈子查询);另匹配发布指针(is_active 且 version = active_search_version),未发布版本不可检索;预算耗尽/不可核算 → 503(不回退 mock) |
 | 纪要查看 | `GET /meetings/{id}/minutes` | 会谈访问检查;条目证据解析限定本会谈录音的版本链(防跨会谈探测);最新纪要版本的证据引用旧版本片段仍可解析(片段不可变) |
+| 纪要人工修订 | `POST /meetings/{id}/minutes/versions` | 会谈访问检查(404);必须带 `base_version_id`,**非最新版 → 409**(不静默覆盖);内容走与 AI 草稿同一套校验(引用必须属本会谈、decision/todo 缺负责人或截止日期须标待确认,否则 422);只追加 `human_edit` 新版本,原版不改写;基版本不存在/不属本会谈/不可见 → 统一 404 |
+| 纪要确认 | `POST /meetings/{id}/minutes/confirm` | 会谈访问检查(404);确认**只作用于传入的那一个版本**,写入 `confirmed_by/confirmed_at`;编辑出的新版本一律回到 pending_review,需重新确认;同版本重复确认幂等(不刷新时间、不换确认人) |
 | 人工转写导入 | `POST /meetings/{id}/transcript` | 会谈访问检查(404);`recording_id` 指定时须属本会谈(否则同样 404,不区分);导入者记入 `transcript_version.created_by`;模型调用按调用者机构记账与预算约束 |
 | 运行元信息 | `GET /meta` | 仅认证用户可读;返回**实际生效**的 Provider 组合与是否 mock(配置不可用时 503,不伪装) |
 
@@ -27,7 +29,7 @@
 | 转写版本列表 / 片段单独查看 | 无 API(片段原文仅内嵌于问答引用与纪要证据响应) |
 | 历史纪要版本内容查看 | 仅返回最新版本完整内容 + 全部版本摘要;旧版本内容及其引用解析无入口 |
 | 人工纠错 / 重新转写触发 | 数据模型支持(human_correction/re_asr 版本、segment_mapping),流程 API 未实现 |
-| 纪要人工确认 / 编辑流转 | 未实现(纪要状态恒为 pending_review,无流转入口) |
+| 纪要人工确认 / 编辑流转 | **已实现**:编辑追加 human_edit 版本(记录操作者、时间、parent 版本),确认写在版本行上;历史版本与各自确认状态在 `GET minutes` 的 `versions` 中返回 |
 | 问答历史 / query_log 审计查看 | 无 API(仅落库) |
 | 全局(跨会谈)问答 | 未实现(当前为会谈内问答,见 D-18) |
 

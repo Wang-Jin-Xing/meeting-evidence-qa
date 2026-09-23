@@ -51,6 +51,10 @@ class MinutesVersion(Base):
     )
     created_by: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    # 确认落在**版本行**上:谁确认了哪一版。新编辑出的版本从 pending_review 重新起算,
+    # 旧版本的确认不会跟着走(D-62)。未确认 = 两列都为 NULL,不填默认值。
+    confirmed_by: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class QueryLog(Base):

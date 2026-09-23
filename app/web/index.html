@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>会谈纪要与证据问答 · 演示</title>
-<link rel="stylesheet" href="/static/style.css?v=20260923f">
+<link rel="stylesheet" href="/static/style.css?v=20260923g">
 </head>
 <body>
 <header class="topbar">
@@ -82,6 +82,14 @@
       <div class="card">
         <h3>3. 结构化纪要(含证据引用)</h3>
         <div id="minutes"><span class="hint">尚无纪要。</span></div>
+        <div id="minutes-actions"></div>
+        <div class="inline hidden" id="minutes-edit">
+          <textarea id="minutes-json" rows="10" spellcheck="false"></textarea>
+          <p class="hint">改的是**副本**:提交会追加一个新版本,AI 原版保留;
+            新版本仍需重新确认。证据必须引用本会谈的片段 id,服务端会校验。</p>
+          <button id="btn-minutes-save">另存为修订版</button>
+          <div id="minutes-edit-result" class="result"></div>
+        </div>
       </div>
 
       <div class="card">
@@ -97,6 +105,6 @@
 </main>
 
 <div id="toast" class="toast hidden"></div>
-<script src="/static/app.js?v=20260923f"></script>
+<script src="/static/app.js?v=20260923g"></script>
 </body>
 </html>

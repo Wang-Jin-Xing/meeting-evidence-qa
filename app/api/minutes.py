@@ -1,22 +1,31 @@
-"""纪要查看:GET /meetings/{id}/minutes。"""
+"""纪要:查看 + 人工修订 + 按版本确认。
+
+GET  /meetings/{id}/minutes                 最新版完整内容 + 全部版本摘要
+POST /meetings/{id}/minutes/versions        基于某版追加人工修订版(并发送 409)
+POST /meetings/{id}/minutes/confirm         确认**指定版本**
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.db import get_db
+from app.core.db import get_db, engine
 from app.core.deps import get_current_user
 from app.models.minutes import MinutesVersion
 from app.models.org import User
 from app.models.recording import Recording
 from app.models.transcript import TranscriptSegment, TranscriptVersion
 from app.schemas.minutes import (
+    MinutesConfirmIn,
     MinutesContentOut,
     MinutesDetailOut,
+    MinutesEditIn,
     MinutesItemOut,
     MinutesVersionBrief,
     SegmentEvidenceOut,
 )
+from app.services import minutes_workflow
 from app.services.access import get_accessible_meeting
+from app.services.minutes_validator import MinutesValidationError
 
 router = APIRouter(tags=["minutes"])
 
@@ -100,8 +109,61 @@ def get_meeting_minutes(
         source_type=latest.source_type.value,
         status=latest.status.value,
         created_at=latest.created_at,
+        created_by=latest.created_by,
+        confirmed_by=latest.confirmed_by,
+        confirmed_at=latest.confirmed_at,
         content=MinutesContentOut(items=items),
         versions=[
             MinutesVersionBrief.model_validate(v) for v in versions
         ],
     )
+
+
+@router.post("/meetings/{meeting_id}/minutes/versions",
+             response_model=MinutesVersionBrief,
+             status_code=status.HTTP_201_CREATED)
+def edit_minutes(
+    meeting_id: int,
+    body: MinutesEditIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """人工修订:追加 human_edit 新版本,AI 草稿原样保留。"""
+    if get_accessible_meeting(db, user, meeting_id) is None:
+        raise HTTPException(status_code=404, detail="会谈不存在或无权访问")
+    try:
+        return minutes_workflow.edit_minutes(
+            engine, meeting_id, base_version_id=body.base_version_id,
+            content=body.content, actor_id=user.id)
+    except minutes_workflow.MinutesVersionNotFound:
+        # 版本不存在 / 不属于本会谈 / 不属于可见会谈,对外同一形态,不泄露存在性
+        raise HTTPException(status_code=404, detail="纪要版本不存在或无权访问")
+    except minutes_workflow.StaleMinutesEdit as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "该纪要已被他人修改,请基于最新版本重试",
+                "base_version_id": e.base_version_id,
+                "latest_version_no": e.latest_version_no,
+            },
+        )
+    except MinutesValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.post("/meetings/{meeting_id}/minutes/confirm",
+             response_model=MinutesVersionBrief)
+def confirm_minutes(
+    meeting_id: int,
+    body: MinutesConfirmIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """确认指定版本(不是"整个会谈的纪要")。同版本重复确认幂等。"""
+    if get_accessible_meeting(db, user, meeting_id) is None:
+        raise HTTPException(status_code=404, detail="会谈不存在或无权访问")
+    try:
+        return minutes_workflow.confirm_minutes(
+            engine, meeting_id, version_id=body.version_id, actor_id=user.id)
+    except minutes_workflow.MinutesVersionNotFound:
+        raise HTTPException(status_code=404, detail="纪要版本不存在或无权访问")
