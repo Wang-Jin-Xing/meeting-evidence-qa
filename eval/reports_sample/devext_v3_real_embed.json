@@ -1,0 +1,604 @@
+{
+  "meta": {
+    "timestamp": "2026-09-23T12:14:24.430280+00:00",
+    "git": {
+      "available": true,
+      "rev": "5e72e00580d2caacc28a93373abd2bb369e8201b",
+      "branch": "main",
+      "dirty": true,
+      "modified_files": [
+        "tests/test_eval.py",
+        "val/run_eval.py"
+      ],
+      "untracked_files": [
+        "eval/dataset_dev_ext.json"
+      ],
+      "content_fingerprint": "03ab5aa866096acb",
+      "note": "dirty=True 表示本报告部分代码未提交,仅凭 rev 无法复现;content_fingerprint 覆盖未提交改动内容"
+    },
+    "database": "meeting_evidence",
+    "dataset": {
+      "path": "eval/dataset_dev_ext.json",
+      "version": "eval-v3-devext",
+      "sha256": "73006ff2a45e1f0f",
+      "split_by": "meeting"
+    },
+    "provider_config": {
+      "asr": "mock",
+      "llm": "deepseek",
+      "embed": "bge-m3"
+    },
+    "providers": {
+      "asr": "mock-asr-v1",
+      "llm": "deepseek-chat",
+      "embed": "BAAI/bge-m3(local)"
+    },
+    "providers_detail": {
+      "asr": {
+        "name": "mock-asr",
+        "model": "mock-asr-v1",
+        "is_mock": true
+      },
+      "llm": {
+        "name": "deepseek",
+        "model": "deepseek-chat",
+        "is_mock": false,
+        "prompt_version": "deepseek-meetings-v1"
+      },
+      "embed": {
+        "name": "local-bge-m3",
+        "model": "BAAI/bge-m3(local)",
+        "is_mock": false,
+        "dim": 1024
+      },
+      "all_mock": false
+    },
+    "prompt_version": "deepseek-meetings-v1",
+    "embedding_dim": 1024,
+    "vector_dim_note": "向量列维度固定 1024;Provider 声明维度须与之一致,不符时工厂直接报错(需迁移重建,见 D-03)",
+    "transcript_mode": "asr",
+    "transcript_mode_note": "human_corrected=问答基于人工校对转写(隔离 ASR 误差);asr=基于流水线转写输出(端到端,含 ASR 误差)",
+    "retrieval": {
+      "top_k": 5,
+      "evidence_threshold": 0.66
+    },
+    "elapsed_seconds": 190.2,
+    "is_mock": false,
+    "cost": {
+      "runs_by_status": {
+        "succeeded": 100
+      },
+      "by_basis": {
+        "estimated": {
+          "calls": 32,
+          "priced_calls": 32,
+          "sum_cents": 0.0
+        },
+        "unknown": {
+          "calls": 68,
+          "priced_calls": 0,
+          "sum_cents": null
+        }
+      },
+      "unpriced_real_calls": 28,
+      "budget_cents": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "note": "cost_basis=unknown 的行成本为 NULL(未知),不按 0 计入;mock 调用恒为 unknown,不得据此声称真实调用零成本"
+    },
+    "declaration": "非 mock Provider:结果可用于真实效果对比,但仍受数据集规模与金标质量限制"
+  },
+  "splits": {
+    "dev": {
+      "questions": [
+        {
+          "qid": "devx_q1_warranty_short",
+          "question": "保修几年?",
+          "category": "短问句+数字",
+          "latency_ms": 33199.2,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 3,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "devx_q2_price",
+          "question": "多少钱一台?",
+          "category": "短问句+数字",
+          "latency_ms": 1918.8,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 1,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "devx_q3_training_owner",
+          "question": "谁负责培训?",
+          "category": "归属",
+          "latency_ms": 3176.4,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 2,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": false,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "devx_q4_delivery",
+          "question": "多久能交付?",
+          "category": "短问句+日期归属",
+          "latency_ms": 2204.3,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 3,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "devx_neg_model_mismatch",
+          "question": "V700的保修期是多久?",
+          "category": "型号错配",
+          "latency_ms": 1328.7,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 3,
+          "citation_count": 0,
+          "expected": "no_answer",
+          "correct": true,
+          "false_positive": false
+        },
+        {
+          "qid": "devx_neg_no_topic",
+          "question": "设备的折旧年限怎么算?",
+          "category": "无答案",
+          "latency_ms": 1174.8,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 1,
+          "citation_count": 0,
+          "expected": "no_answer",
+          "correct": true,
+          "false_positive": false
+        },
+        {
+          "qid": "devx_r_q1_price_short",
+          "question": "每盒多少钱?",
+          "category": "短问句+数字",
+          "latency_ms": 1207.1,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 1,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "devx_r_q2_payment",
+          "question": "账期多久?",
+          "category": "短问句+数字",
+          "latency_ms": 990.1,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 2,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "devx_r_q3_cold_chain",
+          "question": "冷链几度?",
+          "category": "短问句+数字",
+          "latency_ms": 1430.1,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 2,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "devx_r_q4_cert_expiry",
+          "question": "注册证有效期到什么时候?",
+          "category": "日期归属",
+          "latency_ms": 993.5,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 2,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "devx_r_neg_model_mismatch",
+          "question": "R100试剂每盒多少钱?",
+          "category": "型号错配",
+          "latency_ms": 992.1,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 2,
+          "citation_count": 0,
+          "expected": "no_answer",
+          "correct": true,
+          "false_positive": false
+        },
+        {
+          "qid": "devx_r_neg_no_topic",
+          "question": "是否提供免费上机服务?",
+          "category": "无答案",
+          "latency_ms": 192.2,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 0,
+          "citation_count": 0,
+          "expected": "no_answer",
+          "correct": true,
+          "false_positive": false
+        },
+        {
+          "qid": "devx_e_q1_response_short",
+          "question": "响应多久?",
+          "category": "短问句+数字",
+          "latency_ms": 1162.5,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 1,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "devx_e_q2_cost",
+          "question": "维保费多少?",
+          "category": "短问句+数字",
+          "latency_ms": 1008.2,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 2,
+          "citation_count": 0,
+          "expected": "answer",
+          "evidence_hit": false,
+          "answer_hit": false,
+          "correct": false,
+          "missed": true
+        },
+        {
+          "qid": "devx_e_q3_negation",
+          "question": "清洗液包含在维保包里吗?",
+          "category": "否定",
+          "latency_ms": 1015.1,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 1,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "devx_e_neg_date_attribution",
+          "question": "维保费什么时候开始缴纳?",
+          "category": "日期归属",
+          "latency_ms": 1097.4,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 1,
+          "citation_count": 0,
+          "expected": "no_answer",
+          "correct": true,
+          "false_positive": false
+        },
+        {
+          "qid": "devx_e_neg_model_mismatch",
+          "question": "硬镜的配件质保是多久?",
+          "category": "型号错配",
+          "latency_ms": 1056.9,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 2,
+          "citation_count": 1,
+          "expected": "no_answer",
+          "correct": false,
+          "false_positive": true
+        },
+        {
+          "qid": "devx_e_neg_no_topic",
+          "question": "明年维保费会涨价吗?",
+          "category": "无答案",
+          "latency_ms": 1015.3,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 2,
+          "citation_count": 0,
+          "expected": "no_answer",
+          "correct": true,
+          "false_positive": false
+        },
+        {
+          "qid": "devx_a_q1_total_price",
+          "question": "总价多少?",
+          "category": "短问句+数字",
+          "latency_ms": 197.2,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 0,
+          "citation_count": 0,
+          "expected": "answer",
+          "evidence_hit": false,
+          "answer_hit": false,
+          "correct": false,
+          "missed": true
+        },
+        {
+          "qid": "devx_a_q2_delivery_short",
+          "question": "多久交付?",
+          "category": "短问句+日期归属",
+          "latency_ms": 1611.6,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 4,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "devx_a_q3_invoice",
+          "question": "发票什么时候开?",
+          "category": "日期归属",
+          "latency_ms": 1626.8,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 3,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "devx_a_neg_model_mismatch",
+          "question": "A300的耗材价格是多少?",
+          "category": "型号错配+无答案",
+          "latency_ms": 1564.3,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 1,
+          "citation_count": 0,
+          "expected": "no_answer",
+          "correct": true,
+          "false_positive": false
+        },
+        {
+          "qid": "devx_a_neg_date_attribution",
+          "question": "蒸发罐什么时候到货安装?",
+          "category": "日期归属",
+          "latency_ms": 1690.2,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 3,
+          "citation_count": 1,
+          "expected": "no_answer",
+          "correct": false,
+          "false_positive": true
+        },
+        {
+          "qid": "devx_a_neg_no_topic",
+          "question": "能否用融资租赁方式采购?",
+          "category": "无答案",
+          "latency_ms": 226.3,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 0,
+          "citation_count": 0,
+          "expected": "no_answer",
+          "correct": true,
+          "false_positive": false
+        }
+      ],
+      "summary": {
+        "total": 24,
+        "answer_questions": 14,
+        "evidence_hit_rate": 0.8571428571428571,
+        "answer_hit_rate": 0.7857142857142857,
+        "missed_rate": 0.14285714285714285,
+        "no_answer_questions": 10,
+        "no_answer_correct_rate": 0.8,
+        "no_answer_false_positive_rate": 0.2,
+        "latency_ms": {
+          "avg": 2586.6,
+          "p95": 3176.4,
+          "max": 33199.2,
+          "n": 24
+        },
+        "by_category": {
+          "否定": {
+            "n": 1,
+            "answer_n": 1,
+            "answer_correct": 1,
+            "no_answer_n": 0,
+            "no_answer_correct": 0,
+            "false_positive": 0
+          },
+          "型号错配": {
+            "n": 3,
+            "answer_n": 0,
+            "answer_correct": 0,
+            "no_answer_n": 3,
+            "no_answer_correct": 2,
+            "false_positive": 1
+          },
+          "型号错配+无答案": {
+            "n": 1,
+            "answer_n": 0,
+            "answer_correct": 0,
+            "no_answer_n": 1,
+            "no_answer_correct": 1,
+            "false_positive": 0
+          },
+          "归属": {
+            "n": 1,
+            "answer_n": 1,
+            "answer_correct": 1,
+            "no_answer_n": 0,
+            "no_answer_correct": 0,
+            "false_positive": 0
+          },
+          "无答案": {
+            "n": 4,
+            "answer_n": 0,
+            "answer_correct": 0,
+            "no_answer_n": 4,
+            "no_answer_correct": 4,
+            "false_positive": 0
+          },
+          "日期归属": {
+            "n": 4,
+            "answer_n": 2,
+            "answer_correct": 2,
+            "no_answer_n": 2,
+            "no_answer_correct": 1,
+            "false_positive": 1
+          },
+          "短问句+数字": {
+            "n": 8,
+            "answer_n": 8,
+            "answer_correct": 6,
+            "no_answer_n": 0,
+            "no_answer_correct": 0,
+            "false_positive": 0
+          },
+          "短问句+日期归属": {
+            "n": 2,
+            "answer_n": 2,
+            "answer_correct": 2,
+            "no_answer_n": 0,
+            "no_answer_correct": 0,
+            "false_positive": 0
+          }
+        }
+      },
+      "permission_probes": [
+        {
+          "pid": "devx_p1_cross_org",
+          "kind": "cross_org",
+          "category": "越权-跨机构",
+          "question": "V900保修几年?",
+          "expected_status": 404,
+          "status": 404,
+          "correct": true,
+          "citations_within_meeting": null
+        },
+        {
+          "pid": "devx_p2_same_org_not_whitelisted",
+          "kind": "same_org_plain_user",
+          "category": "越权-同机构非白名单",
+          "question": "V900保修几年?",
+          "expected_status": 404,
+          "status": 404,
+          "correct": true,
+          "citations_within_meeting": null
+        },
+        {
+          "pid": "devx_p3_whitelisted_allowed",
+          "kind": "whitelisted",
+          "category": "越权-白名单正向对照",
+          "question": "V900保修几年?",
+          "expected_status": 200,
+          "status": 200,
+          "correct": true,
+          "citations_within_meeting": true
+        },
+        {
+          "pid": "devx_r_p1_cross_org",
+          "kind": "cross_org",
+          "category": "越权-跨机构",
+          "question": "试剂每盒多少钱?",
+          "expected_status": 404,
+          "status": 404,
+          "correct": true,
+          "citations_within_meeting": null
+        },
+        {
+          "pid": "devx_r_p2_same_org_visible",
+          "kind": "same_org_plain_user",
+          "category": "越权-同机构可见(正向对照)",
+          "question": "试剂每盒多少钱?",
+          "expected_status": 200,
+          "status": 200,
+          "correct": true,
+          "citations_within_meeting": true
+        },
+        {
+          "pid": "devx_e_p1_cross_org",
+          "kind": "cross_org",
+          "category": "越权-跨机构",
+          "question": "维保费多少?",
+          "expected_status": 404,
+          "status": 404,
+          "correct": true,
+          "citations_within_meeting": null
+        },
+        {
+          "pid": "devx_e_p2_same_org_visible",
+          "kind": "same_org_plain_user",
+          "category": "越权-同机构可见(正向对照)",
+          "question": "维保费多少?",
+          "expected_status": 200,
+          "status": 200,
+          "correct": true,
+          "citations_within_meeting": true
+        },
+        {
+          "pid": "devx_a_p1_cross_org",
+          "kind": "cross_org",
+          "category": "越权-跨机构",
+          "question": "总价多少?",
+          "expected_status": 404,
+          "status": 404,
+          "correct": true,
+          "citations_within_meeting": null
+        },
+        {
+          "pid": "devx_a_p2_same_org_not_whitelisted",
+          "kind": "same_org_plain_user",
+          "category": "越权-同机构非白名单",
+          "question": "总价多少?",
+          "expected_status": 404,
+          "status": 404,
+          "correct": true,
+          "citations_within_meeting": null
+        },
+        {
+          "pid": "devx_a_p3_whitelisted_allowed",
+          "kind": "whitelisted",
+          "category": "越权-白名单正向对照",
+          "question": "总价多少?",
+          "expected_status": 200,
+          "status": 200,
+          "correct": true,
+          "citations_within_meeting": true
+        }
+      ],
+      "permission_summary": {
+        "n": 10,
+        "correct": 10
+      }
+    }
+  }
+}

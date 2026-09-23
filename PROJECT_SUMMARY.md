@@ -5,7 +5,7 @@
 
 - 运行形态:FastAPI + 独立 worker 进程 + PostgreSQL 16/pgvector;界面是无构建的静态页
 - 规模事实(可核对):`git log` 29 次提交、16 个 HTTP 接口、8 个 Alembic 迁移、
-  20 个测试文件,**135 passed / 3 skipped**(skipped 见 §6)
+  20 个测试文件,**138 passed / 3 skipped**(skipped 见 §6)
 - 交付状态:本机可从停止状态一键起(`scripts/dev_up.ps1`),演示数据、真实录音链路、
   评测与验收工件齐备;**未部署公网、未公开仓库**
 

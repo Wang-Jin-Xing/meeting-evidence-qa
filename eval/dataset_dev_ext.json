@@ -1,0 +1,195 @@
+{
+  "dataset_version": "eval-v3-devext",
+  "split_by": "meeting",
+  "provenance": "全部为**人工编写的虚构评测语料**,不是真实录音;分数只说明链路与检索/生成行为,不得计入真实 ASR 或真实会谈质量结论。",
+  "relation_to_frozen_set": "本文件是 dev 的**扩充集**,与冻结的 eval/dataset.json 并列保存;冻结集的 test 会谈与题面**一字未改**,任何调参结论都不得回流到本文件的题面上重算成功。",
+  "note": "每题带 category;可答题给 answer_clue 与 evidence_text(须为语料某句的子串),无答案题给 no_answer。corpus 为注入 mock ASR 的'带识别错误版',corrected_corpus 为人工校对版(--transcript human_corrected 使用)。少数题的证据句在 corpus 里刻意带识别错误:这类题在 asr 模式下的未命中是**要测的 ASR 影响**,不是数据错误(与 D-55/D-59 同一口径)。",
+  "meetings": [
+    {
+      "id": "devx_v900_ventilator",
+      "split": "dev",
+      "batch": "dev_ext_v3",
+      "corpus_origin": "authored_fictional",
+      "title": "V900呼吸机采购与售后洽谈(评测dev扩)",
+      "vendor_name": "虚构厂商丁",
+      "topic": "呼吸机采购",
+      "visibility": "restricted",
+      "corpus": [
+        ["周院长(机构)", "今天谈V900呼吸机的采购价格和售后条款"],
+        ["孙经理(厂商)", "V900的报价是每台68万元,含标准配件"],
+        ["周院长(机构)", "保修期呢,整机保多久"],
+        ["孙经理(厂商)", "整机保修5年,耗材不在保修范围内"],
+        ["吴主任(机构)", "培训谁来做,要做几天"],
+        ["孙经理(厂商)", "临床应用培训由我们负责,大约2天"],
+        ["周院长(机构)", "交付周期能承诺多久"],
+        ["孙经理(厂商)", "合同签订后45天内完成交付"],
+        ["吴主任(机构)", "上一代的V700你们还供货吗"],
+        ["孙经理(厂商)", "V700已经停产,只继续提供维保服务"]
+      ],
+      "corrected_corpus": [
+        ["周院长(机构)", "今天谈V900呼吸机的采购价格和售后条款"],
+        ["孙经理(厂商)", "V900的报价是每台68万元,含标准配件"],
+        ["周院长(机构)", "保修期呢,整机保多久"],
+        ["孙经理(厂商)", "整机保修5年,耗材不在保修范围内"],
+        ["吴主任(机构)", "培训谁来做,要做几天"],
+        ["孙经理(厂商)", "临床应用培训由我们负责,大约2天"],
+        ["周院长(机构)", "交付周期能承诺多久"],
+        ["孙经理(厂商)", "合同签订后45天内完成交付"],
+        ["吴主任(机构)", "上一代的V700你们还供货吗"],
+        ["孙经理(厂商)", "V700已经停产,只继续提供维保服务"]
+      ],
+      "permission_probes": [
+        {"pid": "devx_p1_cross_org", "kind": "cross_org", "question": "V900保修几年?", "expect_status": 404, "category": "越权-跨机构"},
+        {"pid": "devx_p2_same_org_not_whitelisted", "kind": "same_org_plain_user", "question": "V900保修几年?", "expect_status": 404, "category": "越权-同机构非白名单"},
+        {"pid": "devx_p3_whitelisted_allowed", "kind": "whitelisted", "question": "V900保修几年?", "expect_status": 200, "category": "越权-白名单正向对照"}
+      ],
+      "questions": [
+        {"qid": "devx_q1_warranty_short", "question": "保修几年?", "answer_clue": "5年", "evidence_text": "保修", "category": "短问句+数字", "note": "corpus 里这句被识别成'保修',asr 模式下 evidence 仍可命中'修'以外的子串;此题专为 0.66 阈值的短问句失败面而设"},
+        {"qid": "devx_q2_price", "question": "多少钱一台?", "answer_clue": "68万", "evidence_text": "68万元", "category": "短问句+数字"},
+        {"qid": "devx_q3_training_owner", "question": "谁负责培训?", "answer_clue": "我们", "evidence_text": "培训由我们负责", "category": "归属"},
+        {"qid": "devx_q4_delivery", "question": "多久能交付?", "answer_clue": "45天", "evidence_text": "45天内完成交付", "category": "短问句+日期归属"},
+        {"qid": "devx_neg_model_mismatch", "question": "V700的保修期是多久?", "no_answer": true, "category": "型号错配", "note": "V700 只谈了停产与维保,未谈保修年限;V900 的 5 年不得归属到 V700"},
+        {"qid": "devx_neg_no_topic", "question": "设备的折旧年限怎么算?", "no_answer": true, "category": "无答案"}
+      ]
+    },
+    {
+      "id": "devx_reagent_supply",
+      "split": "dev",
+      "batch": "dev_ext_v3",
+      "corpus_origin": "authored_fictional",
+      "title": "检验试剂供货条件沟通(评测dev扩)",
+      "vendor_name": "虚构厂商戊",
+      "topic": "试剂供货",
+      "visibility": "org",
+      "corpus": [
+        ["钱主任(机构)", "这次主要确认试剂的单价和结算方式"],
+        ["冯经理(厂商)", "R200试剂是每盒320元,一盒50人份"],
+        ["钱主任(机构)", "结算账期你们一般给多久"],
+        ["冯经理(厂商)", "对账后60天付款,季度返点另算"],
+        ["检验科(机构)", "冷链运输怎么保证温度"],
+        ["冯经理(厂商)", "全程2到8摄氏度冷藏车配送"],
+        ["检验科(机构)", "这批试剂的注册证到什么时候"],
+        ["冯经理(厂商)", "注册证有效期到2027年12月"],
+        ["钱主任(机构)", "旧的R100试剂还能用吗"],
+        ["冯经理(厂商)", "R100已换代,不建议继续使用"]
+      ],
+      "corrected_corpus": [
+        ["钱主任(机构)", "这次主要确认试剂的单价和结算方式"],
+        ["冯经理(厂商)", "R200试剂是每盒320元,一盒50人份"],
+        ["钱主任(机构)", "结算账期你们一般给多久"],
+        ["冯经理(厂商)", "对账后60天付款,季度返点另算"],
+        ["检验科(机构)", "冷链运输怎么保证温度"],
+        ["冯经理(厂商)", "全程2到8摄氏度冷藏车配送"],
+        ["检验科(机构)", "这批试剂的注册证到什么时候"],
+        ["冯经理(厂商)", "注册证有效期到2027年12月"],
+        ["钱主任(机构)", "旧的R100试剂还能用吗"],
+        ["冯经理(厂商)", "R100已换代,不建议继续使用"]
+      ],
+      "permission_probes": [
+        {"pid": "devx_r_p1_cross_org", "kind": "cross_org", "question": "试剂每盒多少钱?", "expect_status": 404, "category": "越权-跨机构"},
+        {"pid": "devx_r_p2_same_org_visible", "kind": "same_org_plain_user", "question": "试剂每盒多少钱?", "expect_status": 200, "category": "越权-同机构可见(正向对照)"}
+      ],
+      "questions": [
+        {"qid": "devx_r_q1_price_short", "question": "每盒多少钱?", "answer_clue": "320", "evidence_text": "320元", "category": "短问句+数字"},
+        {"qid": "devx_r_q2_payment", "question": "账期多久?", "answer_clue": "60天", "evidence_text": "60天付款", "category": "短问句+数字"},
+        {"qid": "devx_r_q3_cold_chain", "question": "冷链几度?", "answer_clue": "2到8", "evidence_text": "摄氏度", "category": "短问句+数字"},
+        {"qid": "devx_r_q4_cert_expiry", "question": "注册证有效期到什么时候?", "answer_clue": "2027年12月", "evidence_text": "注册证有效期", "category": "日期归属"},
+        {"qid": "devx_r_neg_model_mismatch", "question": "R100试剂每盒多少钱?", "no_answer": true, "category": "型号错配", "note": "只报了 R200 单价;不得把 320 元归属给 R100"},
+        {"qid": "devx_r_neg_no_topic", "question": "是否提供免费上机服务?", "no_answer": true, "category": "无答案"}
+      ]
+    },
+    {
+      "id": "devx_endoscope_maintenance",
+      "split": "dev",
+      "batch": "dev_ext_v3",
+      "corpus_origin": "authored_fictional",
+      "title": "内窥镜年度维保续签洽谈(评测dev扩)",
+      "vendor_name": "虚构厂商己",
+      "topic": "设备维保",
+      "visibility": "org",
+      "corpus": [
+        ["设备科(机构)", "今年维保合同要续签,先确认服务级别"],
+        ["郑经理(厂商)", "报修后4小时内响应,24小时内到场"],
+        ["设备科(机构)", "全年维保费是多少"],
+        ["郑经理(厂商)", "三台内窥镜合计每年18万元"],
+        ["张护士长(机构)", "更换的配件保修多久"],
+        ["郑经理(厂商)", "配件质量保质180天"],
+        ["设备科(机构)", "操作复训安排在什么时候"],
+        ["郑经理(厂商)", "我们4月18日来院做复训"],
+        ["张护士长(机构)", "软镜的清洗液算耗材吗"],
+        ["郑经理(厂商)", "清洗液属于耗材,不含在维保包里"]
+      ],
+      "corrected_corpus": [
+        ["设备科(机构)", "今年维保合同要续签,先确认服务级别"],
+        ["郑经理(厂商)", "报修后4小时内响应,24小时内到场"],
+        ["设备科(机构)", "全年维保费是多少"],
+        ["郑经理(厂商)", "三台内窥镜合计每年18万元"],
+        ["张护士长(机构)", "更换的配件保修多久"],
+        ["郑经理(厂商)", "配件质保180天"],
+        ["设备科(机构)", "操作复训安排在什么时候"],
+        ["郑经理(厂商)", "我们4月18日来院做复训"],
+        ["张护士长(机构)", "软镜的清洗液算耗材吗"],
+        ["郑经理(厂商)", "清洗液属于耗材,不含在维保包里"]
+      ],
+      "permission_probes": [
+        {"pid": "devx_e_p1_cross_org", "kind": "cross_org", "question": "维保费多少?", "expect_status": 404, "category": "越权-跨机构"},
+        {"pid": "devx_e_p2_same_org_visible", "kind": "same_org_plain_user", "question": "维保费多少?", "expect_status": 200, "category": "越权-同机构可见(正向对照)"}
+      ],
+      "questions": [
+        {"qid": "devx_e_q1_response_short", "question": "响应多久?", "answer_clue": "4小时", "evidence_text": "小时内响应", "category": "短问句+数字"},
+        {"qid": "devx_e_q2_cost", "question": "维保费多少?", "answer_clue": "18万", "evidence_text": "18万元", "category": "短问句+数字"},
+        {"qid": "devx_e_q3_negation", "question": "清洗液包含在维保包里吗?", "answer_clue": "不含", "evidence_text": "属于耗材", "category": "否定"},
+        {"qid": "devx_e_neg_date_attribution", "question": "维保费什么时候开始缴纳?", "no_answer": true, "category": "日期归属", "note": "4月18日是操作复训日期,不是缴费时间;不得归属"},
+        {"qid": "devx_e_neg_model_mismatch", "question": "硬镜的配件质保是多久?", "no_answer": true, "category": "型号错配", "note": "只谈了内窥镜配件质保180天,未区分硬镜"},
+        {"qid": "devx_e_neg_no_topic", "question": "明年维保费会涨价吗?", "no_answer": true, "category": "无答案"}
+      ]
+    },
+    {
+      "id": "devx_anesthesia_purchase",
+      "split": "dev",
+      "batch": "dev_ext_v3",
+      "corpus_origin": "authored_fictional",
+      "title": "麻醉机采购与发票条款沟通(评测dev扩)",
+      "vendor_name": "虚构厂商庚",
+      "topic": "麻醉机采购",
+      "visibility": "restricted",
+      "corpus": [
+        ["刘院长(机构)", "麻醉机这一批的预算和开票方式今天定一下"],
+        ["何经理(厂商)", "A300三台合计96万元,含运输安装"],
+        ["刘院长(机构)", "发票什么时候能开出来"],
+        ["何经理(厂商)", "验收完成后10个工作日内开具发票"],
+        ["麻醉科(机构)", "设备保修几年,整机和模块一样吗"],
+        ["何经理(厂商)", "整机保修3年,蒸发罐单独保2年"],
+        ["麻醉科(机构)", "什么时候能到货安装"],
+        ["何经理(厂商)", "合同生效后60天内到货并安装"],
+        ["刘院长(机构)", "配套耗材价格能一起定吗"],
+        ["何经理(厂商)", "耗材按目录价另计,本次不含在96万里"]
+      ],
+      "corrected_corpus": [
+        ["刘院长(机构)", "麻醉机这一批的预算和开票方式今天定一下"],
+        ["何经理(厂商)", "A300三台合计96万元,含运输安装"],
+        ["刘院长(机构)", "发票什么时候能开出来"],
+        ["何经理(厂商)", "验收完成后10个工作日内开具发票"],
+        ["麻醉科(机构)", "设备保修几年,整机和模块一样吗"],
+        ["何经理(厂商)", "整机保修3年,蒸发罐单独保2年"],
+        ["麻醉科(机构)", "什么时候能到货安装"],
+        ["何经理(厂商)", "合同生效后60天内到货并安装"],
+        ["刘院长(机构)", "配套耗材价格能一起定吗"],
+        ["何经理(厂商)", "耗材按目录价另计,本次不含在96万里"]
+      ],
+      "permission_probes": [
+        {"pid": "devx_a_p1_cross_org", "kind": "cross_org", "question": "总价多少?", "expect_status": 404, "category": "越权-跨机构"},
+        {"pid": "devx_a_p2_same_org_not_whitelisted", "kind": "same_org_plain_user", "question": "总价多少?", "expect_status": 404, "category": "越权-同机构非白名单"},
+        {"pid": "devx_a_p3_whitelisted_allowed", "kind": "whitelisted", "question": "总价多少?", "expect_status": 200, "category": "越权-白名单正向对照"}
+      ],
+      "questions": [
+        {"qid": "devx_a_q1_total_price", "question": "总价多少?", "answer_clue": "96万", "evidence_text": "96万元", "category": "短问句+数字"},
+        {"qid": "devx_a_q2_delivery_short", "question": "多久交付?", "answer_clue": "60天", "evidence_text": "60天内到货", "category": "短问句+日期归属"},
+        {"qid": "devx_a_q3_invoice", "question": "发票什么时候开?", "answer_clue": "10个工作日", "evidence_text": "开具发票", "category": "日期归属"},
+        {"qid": "devx_a_neg_model_mismatch", "question": "A300的耗材价格是多少?", "no_answer": true, "category": "型号错配+无答案", "note": "只说耗材按目录价另计,未给具体价格;96万不得当成耗材价"},
+        {"qid": "devx_a_neg_date_attribution", "question": "蒸发罐什么时候到货安装?", "no_answer": true, "category": "日期归属", "note": "60天是整机到货时间,未单独谈蒸发罐"},
+        {"qid": "devx_a_neg_no_topic", "question": "能否用融资租赁方式采购?", "no_answer": true, "category": "无答案"}
+      ]
+    }
+  ]
+}

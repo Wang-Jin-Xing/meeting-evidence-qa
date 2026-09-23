@@ -159,6 +159,24 @@ def prepare_meeting(client, session, spec, workdir) -> dict:
     recording_id = q(
         "SELECT recording_id FROM processing_job WHERE id = :j", j=job_id
     )[0][0]
+    # 结果自检:语料是靠 mock ASR 注入的,若转写为空说明**这活儿被别的 worker 抢走了**
+    # (常驻 worker 的 .env 可能配着真实 ASR,它会去识别静音占位音频→产出空文本)。
+    # 不检查的话整轮评测会以"全部无候选"收场,而报告看起来完全正常。
+    empty = q(
+        "SELECT count(*) FROM transcript_segment s"
+        " JOIN transcript_version v ON v.id = s.version_id"
+        " WHERE v.recording_id = :r AND btrim(s.text) = ''", r=recording_id
+    )[0][0]
+    if empty:
+        used = q(
+            "SELECT DISTINCT model_name FROM model_run WHERE job_id = :j", j=job_id
+        )
+        raise AssertionError(
+            f"评测会谈 {spec['id']}(job={job_id})产出 {empty} 条空转写,"
+            f"实际执行转写的模型为 {[u[0] for u in used]}。"
+            f" 本评测要求转写来自注入语料的 mock ASR:请先停掉常驻 worker"
+            f"(scripts/dev_up.ps1 起的那个 python -m app.worker),"
+            f"避免它用真实 ASR 抢领任务去识别静音占位音频。")
     return {
         "meeting_id": meeting.id, "org_id": org.id, "recording_id": recording_id,
         "user_id": user.id, "headers": headers, "spec": spec,
@@ -592,6 +610,21 @@ def main(argv=None) -> dict:
     _s = get_settings()
     print(f"[eval] 检索参数: top_k={_s.qa_top_k}, "
           f"threshold={_s.qa_evidence_threshold}", flush=True)
+
+    # 语料是通过 MEET_MOCK_ASR_CORPUS_FILE 注入 **mock ASR** 的
+    # (app/ai/mock_providers.py 读它)。若 .env 把 ASR 配成真实模型,
+    # 转写阶段会去识别"静音占位音频"→ 得到空文本 → 整轮评测全零候选,
+    # 而报告表面上一切正常。所以这里直接拒绝启动,而不是跑完再解释。
+    if _s.asr_provider != "mock":
+        raise SystemExit(
+            f"[eval] ASR_PROVIDER={_s.asr_provider},不是 mock:本评测靠 mock ASR 注入语料,"
+            f"真 ASR 只会识别静音占位音频并产出空转写。\n"
+            f"        临时改回 mock 再跑(仅影响本终端):$env:ASR_PROVIDER=\"mock\"\n"
+            f"        要测真实 ASR,请改用真实录音链路(demo/ingest_real_recording.py),"
+            f"不要用合成语料冒充真实识别效果。")
+    if not (_s.llm_provider == "mock" and _s.embed_provider == "mock"):
+        print(f"[eval] 注意:非 mock 组合 llm={_s.llm_provider} embed={_s.embed_provider}"
+              f" —— 会产生真实外部调用与真实耗时,报告按实际记录", flush=True)
 
     dataset = json.loads(Path(args.dataset).read_text(encoding="utf-8"))
     wanted = (
