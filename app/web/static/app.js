@@ -289,6 +289,7 @@ async function loadMinutes() {
         <details><summary>证据 ${it.evidence.length} 条</summary>
           ${it.evidence.map((e) => `<div class="ev">
             <b>SEG-${e.segment_id}</b> ${fmtTime(e.start_ms, e.end_ms, e.timestamp_precision)}
+            ${playBtn(e)}
             ${esc(e.speaker || "未知")}:${esc(e.text)}</div>`).join("")}
         </details>
       </div>`).join("");
@@ -305,6 +306,67 @@ function fmtTime(a, b, precision) {
     ? `${range} <span class="sub">(精度:${esc(PRECISION_LABEL[precision] || precision)})</span>`
     : range;
 }
+
+/* ---------- 证据回放 ----------
+ * 音频接口要求 Bearer 头,而 <audio>/<video> 发不出自定义头,
+ * 也不能把令牌塞进 URL(会进浏览器历史与访问日志)。
+ * 因此用带鉴权的 fetch 取字节 → blob URL 播放;时间轴仍按引用的切片范围定位。
+ */
+let _replayUrl = null;
+let _stopAt = null;
+
+function playBtn(c) {
+  if (!c.recording_id || c.start_ms === null || c.start_ms === undefined) return "";
+  return `<button class="play-seg" data-rec="${c.recording_id}" data-s="${c.start_ms}"`
+    + ` data-e="${c.end_ms ?? ""}">▶ 播放本片段</button>`;
+}
+
+async function playEvidence(rec, startMs, endMs) {
+  const el = document.getElementById("player");
+  const label = document.getElementById("replay-label");
+  label.textContent = "正在取回该录音(经鉴权接口)…";
+  try {
+    const resp = await fetch(`/recordings/${rec}/audio`, {
+      headers: { Authorization: "Bearer " + state.token },
+    });
+    if (!resp.ok) {
+      throw new Error(`${resp.status} ${(await resp.text()).slice(0, 160)}`);
+    }
+    const served = resp.headers.get("X-Audio-Source") || "unknown";
+    const width = resp.headers.get("X-Audio-Original-Bits") || "?";
+    if (_replayUrl) URL.revokeObjectURL(_replayUrl);
+    _replayUrl = URL.createObjectURL(await resp.blob());
+    _stopAt = endMs ? endMs / 1000 : null;
+    el.addEventListener("loadedmetadata", () => {
+      el.currentTime = startMs / 1000;
+      el.play();
+    }, { once: true });
+    el.src = _replayUrl;
+    label.innerHTML = `SEG 切片 ${Math.floor(startMs / 1000)}s–`
+      + `${endMs ? Math.floor(endMs / 1000) + "s" : "?"} · `
+      + `<span class="sub">切片范围,非精确语句定位</span> · 播放来源:${esc(served)}`
+      + ` (原件位宽 ${esc(width)};不兼容时服务端另存 16-bit 副本,原件未改)`;
+  } catch (e) {
+    _stopAt = null;
+    label.textContent = "回放失败:" + e.message;
+  }
+}
+
+// 只播被引用的那一段:到末尾自动停,不越界播放整条会议录音
+document.getElementById("player").addEventListener("timeupdate", (ev) => {
+  const el = ev.target;
+  if (_stopAt !== null && el.currentTime >= _stopAt) {
+    el.pause();
+    _stopAt = null;
+  }
+});
+
+document.getElementById("view-detail").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button.play-seg");
+  if (!b) return;
+  playEvidence(Number(b.dataset.rec), Number(b.dataset.s),
+    b.dataset.e ? Number(b.dataset.e) : null);
+});
 
 /* ---------- 问答 ---------- */
 document.getElementById("ask-form").addEventListener("submit", async (ev) => {
@@ -327,7 +389,8 @@ document.getElementById("ask-form").addEventListener("submit", async (ev) => {
       <div class="text">${esc(r.answer)}</div>
       <div class="sub">候选 ${r.relevant_candidate_count} 条 · 引用 ${r.citations.length} 条</div>
       ${r.citations.map((c) => `<div class="ev"><b>SEG-${c.segment_id}</b>
-        ${fmtTime(c.start_ms, c.end_ms, c.timestamp_precision)} ${esc(c.speaker || "未知")}:${esc(c.text)}
+        ${fmtTime(c.start_ms, c.end_ms, c.timestamp_precision)} ${playBtn(c)}
+        ${esc(c.speaker || "未知")}:${esc(c.text)}
         <span class="sub">相似度 ${c.similarity}</span></div>`).join("")}</div>`;
   } catch (e) { box.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 });

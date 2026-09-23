@@ -92,6 +92,8 @@ class QACandidate:
     similarity: float  # 余弦相似度(1 - 余弦距离)
     # 时间信息来源:切片边界 ≠ 精确语音位置,界面与引用必须带精度口径
     timestamp_precision: str | None = None
+    # 证据回放需要知道这条引用属于哪个录音(界面据此请求受鉴权的音频接口)
+    recording_id: int | None = None
 
 
 @dataclass

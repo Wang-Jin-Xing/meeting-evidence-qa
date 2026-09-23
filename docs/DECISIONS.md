@@ -13,6 +13,21 @@
   逐个 sha256 一致,再**改名**C 盘旧目录(可逆)并实测两个模型均从 D 加载、旧目录零新增写入,
   确认无引用后才删除;pip 缓存同样 `pip cache purge` + `global.cache-dir` 指到 D。
   C 盘可用从 8.1GB 回到 14GB。已实现(含回归测试:漏设会静默回落,已设的终端变量优先)。
+- **D-61 证据回放:音频只走鉴权接口,24-bit 降位走派生副本**:新增
+  `GET /recordings/{id}/audio`(权限复用 `visible_meeting_condition`,无权与不存在都 404;
+  单区间 Range → 206/416;`Cache-Control: private, no-store`)。三个刻意的选择:
+  (1) **不把令牌放进 URL**:`<audio>` 发不出 Authorization 头,用 URL 查询参数带 JWT 会
+  把令牌落进浏览器历史与访问日志,因此界面用带鉴权的 fetch 取字节 → `blob:` URL 播放;
+  (2) **不改原件**:浏览器普遍不放 24-bit WAV(本项目真实录音就是 24-bit/48k/立体声),
+  服务端按 checksum 另存 16-bit 副本,写完立刻复核**帧数/采样率/声道与原件一致**
+  (不一致就删副本并报错)——时间轴对得上,切片起止毫秒才不会错位;
+  (3) **只播被引用的那一段**:界面按引用 `start_ms/end_ms` 定位并到点自动停
+  (实测 10s→20.19s 停、20s→28.86s 停,`duration=28.86` 与原件一致),
+  同时保留"切片范围,非精确语句定位"口径,不暗示精确到字。
+  引用与纪要证据新增 `recording_id`(没有它就不知道该播哪条录音),并断言
+  引用所属录音必须在被问会谈名下。已知边界:整条 blob 进内存,超大会话录音需改成
+  流式或签名短链(未做,记入限制)。已实现(8 条新测试:鉴权/跨机构/restricted 白名单/
+  Range/416/24-bit 时间轴/静态目录不暴露)。
 - **D-56 模型组合与阈值的唯一长期配置来源是仓库根 `.env`**:Provider 选择与
   `QA_EVIDENCE_THRESHOLD` 由 `Settings` 读取(`os.environ` 优先于 `.env`,故临时
   `$env:` 仍可覆盖),`demo/seed_demo.py` 不自行设 Provider 变量。因此 README 原先

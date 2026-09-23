@@ -21,6 +21,7 @@ class CitationOut(BaseModel):
     end_ms: int | None
     similarity: float
     timestamp_precision: str | None = None  # 与问题的余弦相似度(1 - 余弦距离)
+    recording_id: int | None = None  # 证据回放按此请求受鉴权的音频接口
 
 
 class AnswerOut(BaseModel):

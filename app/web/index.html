@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>会谈纪要与证据问答 · 演示</title>
-<link rel="stylesheet" href="/static/style.css?v=20260923d">
+<link rel="stylesheet" href="/static/style.css?v=20260923f">
 </head>
 <body>
 <header class="topbar">
@@ -52,6 +52,14 @@
       <div id="d-meta" class="meta"></div>
     </div>
 
+    <div class="card">
+      <h3>证据回放</h3>
+      <audio id="player" controls preload="none"></audio>
+      <div id="replay-label" class="sub">
+        点击纪要或问答引用上的「播放本片段」,只播该引用所属切片的时间范围。
+      </div>
+    </div>
+
     <div class="grid">
       <div class="card">
         <h3>1. 录音上传与处理进度</h3>
@@ -89,6 +97,6 @@
 </main>
 
 <div id="toast" class="toast hidden"></div>
-<script src="/static/app.js?v=20260923d"></script>
+<script src="/static/app.js?v=20260923f"></script>
 </body>
 </html>

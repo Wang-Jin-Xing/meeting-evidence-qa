@@ -21,6 +21,8 @@ class SegmentEvidenceOut(BaseModel):
     # 时间信息来源(如 segment_level_from_slice):界面必须显示精度,
     # 不得把切片边界当成精确语音位置(D-53)
     timestamp_precision: str | None = None
+    # 证据回放:这条片段属于哪个录音(界面据此请求受鉴权的音频接口)
+    recording_id: int | None = None
 
 
 class MinutesItemOut(BaseModel):

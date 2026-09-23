@@ -60,14 +60,14 @@ def get_meeting_minutes(
     segments = {}
     if needed_ids:
         # 解析范围限定本会谈:片段必须经版本链归属该会谈的录音(防跨会谈探测)
-        rows = db.scalars(
-            select(TranscriptSegment)
+        rows = db.execute(
+            select(TranscriptSegment, TranscriptVersion.recording_id)
             .join(TranscriptVersion, TranscriptVersion.id == TranscriptSegment.version_id)
             .join(Recording, Recording.id == TranscriptVersion.recording_id)
             .where(Recording.meeting_id == meeting_id)
             .where(TranscriptSegment.id.in_(needed_ids))
         ).all()
-        segments = {s.id: s for s in rows}
+        segments = {seg.id: (seg, rid) for seg, rid in rows}
 
     items = [
         MinutesItemOut(
@@ -84,9 +84,10 @@ def get_meeting_minutes(
                     text=s.text, start_ms=s.start_ms, end_ms=s.end_ms,
                     timestamp_precision=(s.timestamp_precision.value
                                          if s.timestamp_precision else None),
+                    recording_id=rid,
                 )
-                for s in (segments[sid] for sid in it.get("evidence_segment_ids", [])
-                          if sid in segments)
+                for s, rid in (segments[sid] for sid in it.get("evidence_segment_ids", [])
+                               if sid in segments)
             ],
         )
         for it in raw_items

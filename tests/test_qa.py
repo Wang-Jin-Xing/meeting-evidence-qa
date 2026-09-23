@@ -129,6 +129,15 @@ def test_ask_with_evidence_and_resolvable_citations(client, qa_world):
         assert c["text"] and c["speaker"]
         assert c["start_ms"] is not None and c["end_ms"] is not None
         assert c["similarity"] >= 0.15
+        # 证据回放靠 recording_id 定位音频,缺它界面就只能整条播或播错录音
+        assert c["recording_id"], "引用必须带 recording_id"
+
+    cited_recs = {c["recording_id"] for c in body["citations"]}
+    with SessionLocal() as db:
+        owned = {r[0] for r in db.execute(
+            text("SELECT id FROM recording WHERE meeting_id = :m"),
+            {"m": qa_world["meeting_a_id"]}).all()}
+    assert cited_recs <= owned, "引用不得指向别条会谈的录音"
 
     # 高相似候选命中"注册证"片段(语料第2句,分片1,边界 10s-20s)
     reg = [c for c in body["citations"] if "注册证" in c["text"]]
@@ -402,6 +411,7 @@ def test_get_minutes_with_resolved_evidence(client, qa_world):
     ev = t["evidence"][0]
     assert "注册证" in ev["text"]
     assert ev["speaker"] == "李经理(厂商)"
+    assert ev["recording_id"], "纪要证据同样要能回放到录音"
     assert (ev["start_ms"], ev["end_ms"]) == (10000, 20000)
 
 

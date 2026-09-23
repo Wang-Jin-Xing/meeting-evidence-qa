@@ -41,7 +41,7 @@ def retrieve_candidates(
     """相似度检索,权限与发布状态注入候选 SQL。
 
     返回 (chunk_id, segment_id, distance, seq, speaker, text, start_ms, end_ms,
-    timestamp_precision),
+    timestamp_precision, recording_id),
     按余弦距离升序(最相似在前)。条件:
     - 显式限定 meeting_id = 当前会谈(URL 参数),"属于可见集合"不替代该条件;
     - 权限双注入:org_id 等值 + meeting_id ∈ 可见会谈子查询(不信任单一冗余键);
@@ -60,6 +60,7 @@ def retrieve_candidates(
             TranscriptSegment.start_ms,
             TranscriptSegment.end_ms,
             TranscriptSegment.timestamp_precision,
+            TranscriptVersion.recording_id,
         )
         .join(TranscriptSegment, TranscriptSegment.id == EmbeddingChunk.segment_id)
         .join(
@@ -145,6 +146,7 @@ def ask_question(db: Session, user: User, meeting: Meeting, question: str) -> An
             start_ms=r.start_ms, end_ms=r.end_ms, similarity=round(sim, 6),
             timestamp_precision=(r.timestamp_precision.value
                                  if r.timestamp_precision else None),
+            recording_id=r.recording_id,
         )
         for r, sim in candidates
     ]
@@ -196,6 +198,7 @@ def ask_question(db: Session, user: User, meeting: Meeting, question: str) -> An
                 segment_id=c.segment_id, seq=c.seq, speaker=c.speaker, text=c.text,
                 start_ms=c.start_ms, end_ms=c.end_ms, similarity=c.similarity,
                 timestamp_precision=c.timestamp_precision,
+                recording_id=c.recording_id,
             )
             for c in citations
         ],
