@@ -46,6 +46,8 @@ class RecordingBrief(BaseModel):
     # 界面必须显示文本到底来自自动转写还是人工导入,不与 mock 转写混记
     transcript_version_no: int | None = None
     transcript_source: str | None = None
+    # 实际产出该转写版本的模型名(经 model_run 关联),界面据此显示,不自行推断
+    transcript_model: str | None = None
 
     model_config = {"from_attributes": True}
 

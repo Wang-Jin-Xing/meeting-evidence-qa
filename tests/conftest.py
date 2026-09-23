@@ -7,11 +7,31 @@
 """
 import io
 import itertools
+import os
+import shutil
 import wave
+from pathlib import Path
 from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import text
+
+# 测试与"本机应用配置"隔离:.env 里可能配了真实 Provider 和为该 Provider
+# 校准的阈值;若被测试继承,轻则假失败(阈值口径不同),重则测试进程去调用
+# 付费服务并计入真实费用。需要真实 Provider 集成测试时显式设
+# MEET_TESTS_USE_REAL_PROVIDERS=1(见 tests/test_real_embedding.py)。
+REAL_PROVIDER_TESTS = os.environ.get("MEET_TESTS_USE_REAL_PROVIDERS") == "1"
+if not REAL_PROVIDER_TESTS:
+    for _key, _value in {
+        "ASR_PROVIDER": "mock",
+        "LLM_PROVIDER": "mock",
+        "EMBED_PROVIDER": "mock",
+        "QA_EVIDENCE_THRESHOLD": "0.15",      # mock bigram 的校准值(D-48)
+    }.items():
+        os.environ[_key] = _value
+    # 注意:不要钉 WORKER_* 系列。Settings 的 AliasChoices 优先取
+    # WORKER_LEASE_TTL_SECONDS,一旦写进 os.environ 就会盖过测试用的
+    # MEET_WORKER_LEASE_TTL_SECONDS(短 TTL 注入),导致接管类用例等不到租约过期。
 
 # 必须先于 app.core.db 导入:engine 在该模块导入时按当时配置创建
 from tests.db_guard import TestDatabaseConfigError, setup_test_database
@@ -37,6 +57,7 @@ ALL_TABLES = [
     "user", "organization",
 ]
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
 _counter = itertools.count(1)
 
 
@@ -62,6 +83,17 @@ def clean_database():
     quoted = ", ".join(f'"{t}"' for t in ALL_TABLES)
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {quoted} RESTART IDENTITY CASCADE"))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def clean_worker_logs():
+    """清空 worker stderr 落盘目录。
+
+    日志是跨用例追加写入的:不清的话,失败信息里附带的 traceback
+    可能是上一轮(甚至不同配置那一轮)的残留,会把排查带到沟里。
+    """
+    shutil.rmtree(REPO_ROOT / ".pytest_worker_logs", ignore_errors=True)
+    yield
 
 
 @pytest.fixture(autouse=True)

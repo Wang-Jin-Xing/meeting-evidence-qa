@@ -159,20 +159,21 @@ function renderRecordings(recs) {
 const STAGES = ["prepare", "transcribe", "minutes", "index"];
 
 const SOURCE_LABEL = {
-  asr: "自动转写(ASR)", human_transcription: "人工转写导入",
-  human_correction: "人工校对(在既有版本上追加)", re_asr: "重新转写",
+  asr: "自动转写", human_transcription: "人工转写导入(非识别输出)",
+  human_correction: "人工校对(在既有版本上追加,不覆盖原版本)",
+  re_asr: "重新转写",
 };
 
 function transcriptLabel(r) {
-  if (!r.transcript_source) {
-    return '<span class="hint">尚无转写版本</span> · 音频为静音占位,未做语音识别';
+  // 界面只陈述**能验证的事实**:转写版本的来源类型。
+  // 音频是占位还是真实录音,数据库里没有这个事实,不在这里断言。
+  if (!r.transcript_source) return '<span class="hint">尚无转写版本</span>';
+  let label = `v${r.transcript_version_no} · ${esc(SOURCE_LABEL[r.transcript_source] || r.transcript_source)}`;
+  if (r.transcript_source === "asr") {
+    // 模型名来自 model_run(数据库事实),不由前端推断是否 mock
+    label += ` <span class="tag mock">语音识别输出${
+      r.transcript_model ? " · " + esc(r.transcript_model) : ""}(可能含识别错误)</span>`;
   }
-  const src = r.transcript_source;
-  const human = src.startsWith("human");
-  let label = `v${r.transcript_version_no} · ${esc(SOURCE_LABEL[src] || src)}`;
-  // 人工转写路径下,音频只用于切片与时间轴,必须说明"未做语音识别"
-  if (human) label += ' <span class="tag mock">音频=静音占位(未做 ASR)</span>';
-  if (src === "asr") label += ' <span class="tag mock">来自 mock ASR</span>';
   return label;
 }
 
@@ -197,7 +198,12 @@ function pollJob(jobId) {
     if (job.status === "succeeded" || job.status === "failed") {
       clearInterval(state.pollers[jobId]);
       delete state.pollers[jobId];
-      if (job.status === "succeeded") await loadMinutes();
+      // 重新拉详情:转写来源/版本等派生字段只有这里能刷新
+      if (job.status === "succeeded" && state.meetingId) {
+        const m = await api(`/meetings/${state.meetingId}`);
+        renderRecordings(m.recordings || []);
+        await loadMinutes();
+      }
     }
   };
   tick();

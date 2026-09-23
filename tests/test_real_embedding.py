@@ -1,9 +1,10 @@
 """真实 Embedding 集成测试(默认跳过)。
 
-只在显式启用本地模型时运行——它需要模型权重与数十秒加载时间,
-不属于常规套件:
+只在显式启用真实 Provider 时运行——它需要模型权重与数十秒加载时间,
+不属于常规套件(常规套件里 conftest 会把 Provider 钉回 mock,避免继承
+本机 .env 的真实配置去调用付费服务):
 
-    EMBED_PROVIDER=bge-m3 python -m pytest tests/test_real_embedding.py -v
+    MEET_TESTS_USE_REAL_PROVIDERS=1 EMBED_PROVIDER=bge-m3         python -m pytest tests/test_real_embedding.py -v
 
 验证的是**接入契约**,不是检索效果:维度一致、文档与查询向量同模型、
 索引原子发布时旧索引完整保留。
@@ -17,11 +18,11 @@ from app.core.config import Settings
 from app.core.db import engine
 from app.models.transcript import EMBEDDING_DIM
 
-REAL_EMBED = os.environ.get("EMBED_PROVIDER") == "bge-m3"
+REAL_EMBED = os.environ.get("MEET_TESTS_USE_REAL_PROVIDERS") == "1"
 
 pytestmark = pytest.mark.skipif(
     not REAL_EMBED,
-    reason="需显式设 EMBED_PROVIDER=bge-m3 才跑真实 Embedding 集成测试",
+    reason="需显式设 MEET_TESTS_USE_REAL_PROVIDERS=1 才跑真实 Provider 集成测试",
 )
 
 
@@ -29,7 +30,9 @@ pytestmark = pytest.mark.skipif(
 def embed():
     from app.ai.registry import build
 
-    return build("embed", "bge-m3", Settings())
+    e = build("embed", "bge-m3", Settings())
+    assert e.is_mock is False, "开关已开但配置不是真实 Embedding"
+    return e
 
 
 def _q(sql, **params):

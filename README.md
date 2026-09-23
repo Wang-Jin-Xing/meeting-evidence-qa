@@ -14,36 +14,49 @@
 
 ## 启动步骤
 
+**虚拟环境位置**:仓库根目录下的 `.venv`。下文命令一律写全路径,不依赖
+"激活后才是某个 python"的隐式状态:
+
+- PowerShell:`.\.venv\Scripts\python.exe`
+- Git Bash / CMD:`.venv\Scripts\python.exe`
+- 若你的 venv 建在别处,把下面的 `.venv` 整体替换即可(本项目未使用激活脚本)。
+
+**配置只有一个来源:仓库根的 `.env`**(被 .gitignore 排除)。
+API、worker、评测与演示脚本都读同一份 `.env`,因此**新开终端不需要再 `$env:` 设置**;
+临时实验才用环境变量覆盖(优先级高于 .env)。
+
 ```powershell
 # 1. 数据库(中文目录名需显式指定项目名 -p mes)
 docker compose -p mes up -d
-# 等待健康检查通过
 docker inspect --format '{{.State.Health.Status}}' mes-pg   # 应输出 healthy
 
-# 2. Python 虚拟环境与依赖
+# 2. 虚拟环境与依赖(用系统 python 创建,之后一律用 venv 内的解释器)
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
-# 3. 配置(必须项:测试库;其余默认值即可本地运行,真实密钥只放 .env,已被 .gitignore 排除)
+# 3. 配置
 Copy-Item .env.example .env
-#    编辑 .env,确认 TEST_DATABASE_URL 指向独立测试库(库名不得与 DATABASE_URL 相同)。
-#    未配置 TEST_DATABASE_URL 时 pytest 直接退出,不会清空任何数据库。
+#    必查:TEST_DATABASE_URL 指向独立测试库(库名不得与 DATABASE_URL 相同,
+#    否则 pytest 直接退出,不清任何库);
+#    模型组合与阈值见 .env.example 注释(默认已填本机验证过的真实组合)。
+#    密钥(如 DEEPSEEK_API_KEY)放用户级环境变量或 .env,不进 Git。
 
-# 4. 数据库迁移(应用库)
+# 4. 迁移应用库
 .\.venv\Scripts\python.exe -m alembic upgrade head
 
-# 5. 冒烟测试(真实连接独立测试库的集成测试)
-.\.venv\Scripts\python.exe -m pytest -v
+# 5. 集成测试(独立测试库;首次会自动建库并迁移)
+.\.venv\Scripts\python.exe -m pytest -q
 
-# 6. 启动 API(默认 8000;若被占用改 --port,如 8100)
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8100
+# 6. 一键起 API + 独立 worker,并打印两侧实际生效的模型组合(不输出密钥)
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev_up.ps1 -Port 8100
 
-# 7. 另开一个终端启动 worker(处理转写/纪要/索引的独立进程)
-.\.venv\Scripts\python.exe -m app.worker
-
-# 8. 打开界面
+# 7. 打开界面
 start http://127.0.0.1:8100/
 ```
+
+`scripts/dev_up.ps1` 会:停掉本项目的旧 API/worker → 分别起两个进程 →
+等待 readiness → 打印 worker 启动横幅与登录后 `/meta` 的生效值,
+用于核对"网页上传→持久化任务→独立 worker→结果展示"两侧配置一致。
 
 ## 演示:数据重建与真实模型组合
 
@@ -87,15 +100,13 @@ $env:QA_EVIDENCE_THRESHOLD="0.66"; $env:HF_ENDPOINT="https://hf-mirror.com"
 首轮实测(单样本,不代表整体准确率):识别错误如"布齐/北迅时间/没有报告"
 原样保留;实体问句 3/5 命中,2 问因识别错误导致证据不足(详见 D-55)。
 
-启用真实 Embedding(本地,无需任何密钥与余额):
+启用真实 Embedding(本地,无需任何密钥与余额):把 `.env` 中
+`EMBED_PROVIDER=bge-m3`、`LLM_PROVIDER=deepseek`、`QA_EVIDENCE_THRESHOLD=0.66`、
+`HF_ENDPOINT=https://hf-mirror.com` 配好(huggingface.co 直连在本机超时),然后:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt   # 含 torch-cpu / sentence-transformers
-$env:EMBED_PROVIDER="bge-m3"; $env:LLM_PROVIDER="deepseek"
-$env:HF_ENDPOINT="https://hf-mirror.com"        # huggingface.co 直连在本机超时
-$env:QA_EVIDENCE_THRESHOLD="0.66"               # 真实向量的阈值,不能沿用 mock 的 0.15(D-48)
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8100
-.\.venv\Scripts\python.exe demo/verify_real_embedding.py   # 维度核实 + 索引重建 + 五项验证
+.\.venv\Scripts\python.exe demo/verify_real_embedding.py        # 维度核实 + 索引重建 + 五项验证
 ```
 
 阈值为什么必须换:mock bigram 上"无关句"相似度约 0.06,而 bge-m3 上

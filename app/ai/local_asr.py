@@ -73,6 +73,7 @@ class LocalWhisperASR(ASRProvider):
         self.language = (settings.asr_language or "").strip() or None
         self.model_name = f"faster-whisper:{self.model_size}@{self.compute_type}"
         self.runtime_device = f"local:{self.device}:{self.compute_type}"
+        self.hf_endpoint = settings.hf_endpoint
         self._model = None
 
     # ---- 成本 ----
@@ -93,7 +94,9 @@ class LocalWhisperASR(ASRProvider):
         with _LOCK:
             key = (self.model_size, self.device, self.compute_type)
             if key not in _CACHE:
-                os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+                if self.hf_endpoint:
+                    # .env 的值不会自动进入 os.environ,故显式应用(已设则不覆盖)
+                    os.environ.setdefault("HF_ENDPOINT", self.hf_endpoint)
                 from faster_whisper import WhisperModel
 
                 _CACHE[key] = WhisperModel(

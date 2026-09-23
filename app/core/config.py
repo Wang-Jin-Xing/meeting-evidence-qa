@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     asr_device: str = "cpu"
     asr_compute_type: str = "int8"
     asr_language: str = "zh"                  # 留空 = 自动检测
+    # 模型权重下载镜像:huggingface.co 直连在本机超时。
+    # 注意 .env 的值不会自动进入 os.environ,故由 Provider 显式应用。
+    hf_endpoint: str = "https://hf-mirror.com"
 
     # 音频切片时长(秒):切片边界即片段级时间信息来源
     slice_seconds: int = 10

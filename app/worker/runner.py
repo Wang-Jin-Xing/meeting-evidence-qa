@@ -17,7 +17,7 @@ import time
 
 from sqlalchemy import text
 
-from app.ai.registry import build_providers
+from app.ai.registry import build_providers, describe_providers
 from app.core.config import get_settings
 from app.core.db import engine
 from app.models.enums import STAGE_ORDER
@@ -158,6 +158,12 @@ def run(idle_exit_seconds: float = 0.0) -> int:
     """主循环。idle_exit_seconds>0 时连续空闲该秒数后退出(测试用)。"""
     settings = get_settings()
     providers = build_providers()
+    # 启动即自报生效组合(名称/模型/是否 mock,绝不打密钥):
+    # 用于核对 API 与 worker 用的是同一份 .env 配置
+    d = describe_providers(providers)
+    print("[worker] 生效模型: " + " | ".join(
+        f"{k}={d[k]['model']}(mock={d[k]['is_mock']})"
+        for k in ("asr", "llm", "embed")), flush=True)
     wid = worker_id()
     ttl = settings.worker_lease_ttl_seconds
     idle_since: float | None = None

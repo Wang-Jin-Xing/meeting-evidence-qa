@@ -77,3 +77,19 @@ def test_worker_subprocess_inherits_test_database():
     assert out.stdout.strip() == TEST_DB, (
         f"子进程连到了 {out.stdout.strip()!r},应为 {TEST_DB!r}"
     )
+
+
+def test_tests_do_not_inherit_real_providers_from_env():
+    """防回归:应用 .env 里配了真实 Provider 时,测试仍必须跑在 mock 上。
+
+    否则一次 .env 改动就会让集成测试去加载本地大模型、甚至调用付费服务,
+    并把为该模型校准的检索阈值一起带进来(表现为无法解释的成片失败)。
+    """
+    from app.core.config import get_settings
+    from tests.conftest import REAL_PROVIDER_TESTS
+
+    s = get_settings()
+    if REAL_PROVIDER_TESTS:
+        pytest.skip("显式要求真实 Provider 集成测试")
+    assert (s.asr_provider, s.llm_provider, s.embed_provider) == ("mock",)*3
+    assert s.qa_evidence_threshold == 0.15

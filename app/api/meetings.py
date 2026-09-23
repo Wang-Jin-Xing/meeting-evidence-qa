@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.models.meeting import Meeting
+from app.models.model_run import ModelRun
 from app.models.org import MeetingAccess, User
 from app.models.transcript import TranscriptVersion
 from app.schemas.meeting import MeetingCreate, MeetingDetail, MeetingOut, RecordingBrief
@@ -86,6 +87,23 @@ def get_meeting(
             db.get(TranscriptVersion, rec.active_transcript_version_id)
             if rec.active_transcript_version_id else None
         )
+        # 产出模型经 model_run 关联取得:前端只显示事实,不猜 mock/真实。
+        # 注意:ASR 版本由多条分片调用产出,版本行本身不挂 model_run_id,
+        # 因此按该录音任务的 transcribe 调用取模型名;人工来源无"产出模型"。
+        run_model = None
+        if active_version is not None:
+            if active_version.model_run_id:
+                run = db.get(ModelRun, active_version.model_run_id)
+                run_model = run.model_name if run else None
+            elif active_version.source_type.value == "asr" and job is not None:
+                names = db.scalars(
+                    select(ModelRun.model_name)
+                    .where(ModelRun.job_id == job.id)
+                    .where(ModelRun.stage == "transcribe")
+                    .where(ModelRun.status == "succeeded")
+                    .distinct()
+                ).all()
+                run_model = " + ".join(sorted(names)) if names else None
         recordings.append(
             RecordingBrief(
                 id=rec.id,
@@ -98,6 +116,7 @@ def get_meeting(
                                        if active_version else None),
                 transcript_source=(active_version.source_type.value
                                    if active_version else None),
+                transcript_model=run_model,
             )
         )
     # 会话内先按 MeetingOut 取标量字段,再显式挂 recordings:
