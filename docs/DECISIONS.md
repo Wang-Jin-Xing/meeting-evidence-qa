@@ -5,6 +5,11 @@
 
 ## P3 配置来源统一与运行入口验收(2026-09-23)
 
+- **更更正(我自己写错的提交说明)**:提交 `9948b2b` 里我写"UploadAccepted 从来没有
+  duplicate 字段",这句是**错的** —— 字段存在(`app/schemas/recording.py:9`,默认 False),
+  且有测试断言该默认值。准确表述是:重复上传在该路由走 **409** 分支,`duplicate`
+  因此恒为 False,前端 `r.duplicate` 分支**不可达**;修的是前端把幂等拒绝当错误显示。
+  留着错话不管,比写错更糟。
 - **D-56 模型组合与阈值的唯一长期配置来源是仓库根 `.env`**:Provider 选择与
   `QA_EVIDENCE_THRESHOLD` 由 `Settings` 读取(`os.environ` 优先于 `.env`,故临时
   `$env:` 仍可覆盖),`demo/seed_demo.py` 不自行设 Provider 变量。因此 README 原先
