@@ -30,6 +30,14 @@ def get_meta(user: User = Depends(get_current_user)):
         "configured": {
             "asr": s.asr_provider, "llm": s.llm_provider, "embed": s.embed_provider,
         },
+        "retrieval": {
+            "top_k": s.qa_top_k,
+            "evidence_threshold": s.qa_evidence_threshold,
+            "threshold_note": (
+                "证据阈值按 Embedding 模型校准:mock bigram 实测 0.15,"
+                "真实 bge-m3 上不相关句相似度即可达 0.5 以上,须重校准(D-48)"
+            ),
+        },
         "cost_basis_values": [c.value for c in CostBasis],
         "asr_note": (
             "ASR 为 mock 时,自动转写文本仅用于链路演示;"

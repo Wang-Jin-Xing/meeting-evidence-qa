@@ -69,8 +69,24 @@ $env:LLM_PROVIDER="deepseek"; .\.venv\Scripts\python.exe demo/seed_demo.py --res
 | Embedding(检索) | **mock**(字符 bigram) | SiliconFlow `BAAI/bge-m3` 返回 402 账户余额不足,真实检索未接入 |
 | ASR(转写) | **mock** + 人工转写导入 | SiliconFlow `SenseVoiceSmall` 同样 402;演示以人工转写为权威文本来源 |
 
-因此:**问答与纪要的语义判断是真实模型;检索质量结论不成立**(仍是字面重叠检索),
-界面右上角与每次回答都标注了各环节是否 mock。
+启用真实 Embedding(本地,无需任何密钥与余额):
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt   # 含 torch-cpu / sentence-transformers
+$env:EMBED_PROVIDER="bge-m3"; $env:LLM_PROVIDER="deepseek"
+$env:HF_ENDPOINT="https://hf-mirror.com"        # huggingface.co 直连在本机超时
+$env:QA_EVIDENCE_THRESHOLD="0.66"               # 真实向量的阈值,不能沿用 mock 的 0.15(D-48)
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8100
+.\.venv\Scripts\python.exe demo/verify_real_embedding.py   # 维度核实 + 索引重建 + 五项验证
+```
+
+阈值为什么必须换:mock bigram 上"无关句"相似度约 0.06,而 bge-m3 上
+**无关句就有 0.39~0.55**、金标句 0.71~0.82;沿用 0.15 等于所有候选全部通过。
+`0.66` 是在 **dev 会谈**上按"最小金标相似度 − 0.05"取的,标定脚本与分布
+记录在 `demo/verification/real_embedding.json`(不用 test 集调参,D-48)。
+
+因此:**纪要、问答与检索向量都是真实模型;但样本只有 2 场会谈,**
+验证结论只说明那些具体断言成立,不外推为整体准确率。
 `demo/media/*.wav` 是 2 分钟静音占位录音(时长决定切片数即时间轴);
 真实录音可直接替换后重新上传。
 
@@ -181,8 +197,9 @@ P3 首版(可演示、可复现、可交接):
   测试库会话独占锁(并发跑第二个会话直接拒绝启动)
 
 尚未实现 / 不成立:
-- 真实 ASR 与真实 Embedding 接入(服务商账户余额不足),因此**检索质量结论不成立**;
-  真实模型基线的评测数字待服务商可用后重跑
+- 真实 ASR 未启用(云端余额 402;本地 faster-whisper 已接入但实测中文专名
+  错译明显,见 D-50);真实 Embedding 已用本地 bge-m3 接入
+- 更大规模的评测集与真实基线数字(当前 dev/test 各 1 场会谈,只够流程验证)
 - 纪要人工确认/编辑流转、原始音频下载与回放、转写版本列表/片段单独查看、
   历史纪要版本内容查看、问答审计查询等入口(见 docs/PERMISSIONS.md 未实现清单)
 - 评测集规模(dev/test 各 1 场会谈)只够流程冒烟,不足以支撑效果结论

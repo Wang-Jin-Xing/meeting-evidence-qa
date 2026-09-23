@@ -14,6 +14,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from app.ai.deepseek_provider import DeepSeekLLM
+from app.ai.local_asr import LocalWhisperASR
+from app.ai.local_embed import LocalBgeM3Embed
 from app.ai.mock_providers import MockASR, MockEmbed, MockLLM
 from app.ai.providers import ASRProvider, EmbedProvider, LLMProvider
 from app.core.config import Settings, get_settings
@@ -48,7 +50,13 @@ class ProviderSpec:
 _ROLES = {"asr": ASRProvider, "llm": LLMProvider, "embed": EmbedProvider}
 
 REGISTRY: dict[str, dict[str, ProviderSpec]] = {
-    "asr": {"mock": ProviderSpec(lambda _s: MockASR(), note="本地确定性,无真实费用")},
+    "asr": {
+        "mock": ProviderSpec(lambda _s: MockASR(), note="本地确定性,无真实费用"),
+        "whisper": ProviderSpec(
+            lambda s: LocalWhisperASR(s), note="本地 faster-whisper;无按次账单,"
+            "不做说话人分离(speaker 为空)",
+        ),
+    },
     "llm": {
         "mock": ProviderSpec(lambda _s: MockLLM(), note="本地规则式,无真实费用"),
         "deepseek": ProviderSpec(
@@ -56,7 +64,13 @@ REGISTRY: dict[str, dict[str, ProviderSpec]] = {
             note="OpenAI 兼容;tokens 为服务商返回口径,金额按单价表估算",
         ),
     },
-    "embed": {"mock": ProviderSpec(lambda _s: MockEmbed(), note="字符 bigram 哈希向量")},
+    "embed": {
+        "mock": ProviderSpec(lambda _s: MockEmbed(), note="字符 bigram 哈希向量"),
+        "bge-m3": ProviderSpec(
+            lambda s: LocalBgeM3Embed(s), note="本地 BAAI/bge-m3,1024 维,"
+            "无按次账单",
+        ),
+    },
 }
 
 

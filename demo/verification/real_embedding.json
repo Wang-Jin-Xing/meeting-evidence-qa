@@ -1,0 +1,292 @@
+{
+  "meta": {
+    "timestamp": "2026-09-23T02:11:26.856811+00:00",
+    "scope": "真实 Embedding + 真实 LLM + 人工转写输入(本轮不含 ASR)",
+    "providers": {
+      "asr": {
+        "name": "mock-asr",
+        "model": "mock-asr-v1",
+        "is_mock": true
+      },
+      "llm": {
+        "name": "deepseek",
+        "model": "deepseek-chat",
+        "is_mock": false,
+        "prompt_version": "deepseek-meetings-v1"
+      },
+      "embed": {
+        "name": "local-bge-m3",
+        "model": "BAAI/bge-m3(local)",
+        "is_mock": false,
+        "dim": 1024
+      },
+      "all_mock": false
+    },
+    "database": "meeting_evidence",
+    "git": {
+      "rev": "b70d2e20ca2f224b0c23ab68cb5bb5a7a4779fdd",
+      "dirty": true,
+      "changed": [
+        "env.example",
+        "README.md",
+        "app/ai/registry.py",
+        "app/api/meta.py",
+        "app/core/config.py",
+        "app/web/static/app.js",
+        "app/worker/stages.py",
+        "docs/DECISIONS.md",
+        "docs/HANDOFF.md",
+        "requirements.txt",
+        "app/ai/local_asr.py",
+        "app/ai/local_embed.py",
+        "demo/make_demo_audio.py",
+        "demo/media/case_boundary_speech.wav",
+        "demo/media/case_normal_speech.wav",
+        "demo/real_pipeline_demo.py",
+        "demo/verification/",
+        "demo/verify_real_embedding.py",
+        "tests/test_local_providers.py",
+        "tests/test_real_embedding.py"
+      ]
+    }
+  },
+  "dimension_check": {
+    "model_name": "BAAI/bge-m3(local)",
+    "provider": "local-bge-m3",
+    "is_mock": false,
+    "declared_dim": 1024,
+    "actual_dim": 1024,
+    "db_column": "vector(1024)",
+    "column_dim_matches": true,
+    "config_versions": {
+      "embed_provider": "bge-m3",
+      "llm_provider": "deepseek",
+      "asr_provider": "mock",
+      "embed_model": "BAAI/bge-m3",
+      "asr_model": "small",
+      "qa_top_k": 5,
+      "qa_evidence_threshold_config_default": 0.15
+    }
+  },
+  "reindex": [
+    {
+      "recording_id": 1,
+      "old_version": 1,
+      "new_version": 3,
+      "old_chunks_before": 12,
+      "old_visible_before": 12,
+      "new_visible_before_publish": 0,
+      "chunks_built": 12,
+      "pointer_after": 3,
+      "chunk_states_after": [
+        {
+          "version_id": 1,
+          "is_active": false,
+          "rows": 12
+        },
+        {
+          "version_id": 3,
+          "is_active": true,
+          "rows": 12
+        }
+      ],
+      "old_rows_retained": false
+    },
+    {
+      "recording_id": 2,
+      "old_version": 2,
+      "new_version": 4,
+      "old_chunks_before": 12,
+      "old_visible_before": 12,
+      "new_visible_before_publish": 0,
+      "chunks_built": 12,
+      "pointer_after": 4,
+      "chunk_states_after": [
+        {
+          "version_id": 2,
+          "is_active": false,
+          "rows": 12
+        },
+        {
+          "version_id": 4,
+          "is_active": true,
+          "rows": 12
+        }
+      ],
+      "old_rows_retained": false
+    }
+  ],
+  "dev_similarity": {
+    "per_question": [
+      {
+        "question": "注册证什么时候补齐?",
+        "category": "时间点",
+        "top1_sim": 0.7059,
+        "top1_is_gold": true,
+        "gold_sim": 0.7059,
+        "worst_sim": 0.4872
+      },
+      {
+        "question": "整机保修期多长?",
+        "category": "时长",
+        "top1_sim": 0.804,
+        "top1_is_gold": true,
+        "gold_sim": 0.804,
+        "worst_sim": 0.375
+      },
+      {
+        "question": "培训由谁负责?",
+        "category": "负责人",
+        "top1_sim": 0.7091,
+        "top1_is_gold": true,
+        "gold_sim": 0.7091,
+        "worst_sim": 0.4377
+      },
+      {
+        "question": "第一批设备什么时候送到?",
+        "category": "时间点",
+        "top1_sim": 0.8163,
+        "top1_is_gold": true,
+        "gold_sim": 0.8163,
+        "worst_sim": 0.4406
+      },
+      {
+        "question": "明年的科研经费预算是多少?",
+        "category": "无答案",
+        "top1_sim": 0.5521,
+        "top1_is_gold": false,
+        "gold_sim": null,
+        "worst_sim": 0.3942
+      }
+    ],
+    "gold_sim_min": 0.7059,
+    "no_gold_questions_top1_max": 0.5521,
+    "note": "阈值取低于最小金标相似度、高于无金标问题最高分的区间;样本仅 dev 一场会谈,不能据此推断整体召回率"
+  },
+  "threshold": {
+    "used": 0.66,
+    "config_default": 0.15,
+    "dev_gold_sim_min": 0.7059,
+    "dev_no_gold_top1_max": 0.5521,
+    "basis": "dev 会谈相似度分布;低于最小金标相似度留 0.05 余量",
+    "note": "换 Embedding 模型必须重校准(D-20/D-48);mock 的 0.15 不可沿用"
+  },
+  "checks": [
+    {
+      "check": "①正常问答",
+      "case": "case_normal",
+      "question": "注册证什么时候补齐?",
+      "status": 200,
+      "latency_ms": 1059.0,
+      "has_answer": true,
+      "raw_retrieved": 5,
+      "candidates": 1,
+      "citations": [
+        {
+          "segment_id": 26,
+          "similarity": 0.705916,
+          "start_ms": 10000,
+          "text": "X200的注册证和检测报告我们在5月20日之前补齐"
+        }
+      ],
+      "answer": "X200的注册证和检测报告将在5月20日之前补齐。",
+      "pass": true
+    },
+    {
+      "check": "②型号错配",
+      "case": "case_boundary",
+      "question": "Y300的报价是多少?",
+      "status": 200,
+      "latency_ms": 1314.6,
+      "has_sufficient_evidence": true,
+      "answer": "候选片段中明确Y300没有报价，因此无法提供Y300的报价。",
+      "candidates": 5,
+      "citations": [
+        {
+          "segment_id": 40,
+          "similarity": 0.778895,
+          "text": "这次我们只报了Y500的价格,Y300没有报价"
+        }
+      ],
+      "y500_price_attributed_to_y300": false,
+      "pass": true
+    },
+    {
+      "check": "③不补造日期/负责人",
+      "case": "case_boundary",
+      "question": "Y500的注册证什么时候补齐?",
+      "status": 200,
+      "latency_ms": 982.7,
+      "has_sufficient_evidence": true,
+      "answer": "厂商表示注册证正在准备，具体时间还没定。",
+      "dates_in_answer_not_in_evidence": [],
+      "minutes_items_violating_empty_policy": 0,
+      "pass": true
+    },
+    {
+      "check": "④跨机构拒绝",
+      "detail_status": 404,
+      "ask_status": 404,
+      "latency_ms": 5.4,
+      "pass": true
+    },
+    {
+      "check": "⑤引用可解析",
+      "question": "培训由谁负责?",
+      "answer": "培训由厂商负责。",
+      "citations_checked": [
+        {
+          "segment_id": 30,
+          "belongs_to_meeting": true,
+          "text_matches_db": true,
+          "ok": true
+        }
+      ],
+      "pass": true
+    }
+  ],
+  "model_run_ledger": [
+    {
+      "stage": "index",
+      "provider": "local-bge-m3",
+      "model": "BAAI/bge-m3(local)",
+      "is_mock": false,
+      "count": 4,
+      "cost_basis": "estimated",
+      "cost_cents": 0.0
+    },
+    {
+      "stage": "minutes",
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "is_mock": false,
+      "count": 4,
+      "cost_basis": "unknown",
+      "cost_cents": null
+    },
+    {
+      "stage": "qa",
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "is_mock": false,
+      "count": 15,
+      "cost_basis": "unknown",
+      "cost_cents": null
+    },
+    {
+      "stage": "qa",
+      "provider": "local-bge-m3",
+      "model": "BAAI/bge-m3(local)",
+      "is_mock": false,
+      "count": 16,
+      "cost_basis": "estimated",
+      "cost_cents": 0.0
+    }
+  ],
+  "limits": [
+    "样本只有 2 场会谈、若干问题,通过与否只说明这些具体断言成立,不能外推为整体准确率或召回率",
+    "阈值由 dev 单场会谈的相似度分布决定,换会谈/换模型需重测",
+    "转写来源是人工导入,音频为静音占位:本轮不评估任何 ASR 能力",
+    "DeepSeek 未配单价表 → 成本口径 unknown(NULL),不按 0 记账;本地 bge-m3 无按次账单,记 estimated 0(含义是'服务商不按次收费',不等于没有算力与电耗成本)"
+  ]
+}

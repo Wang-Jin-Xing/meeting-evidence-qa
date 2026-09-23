@@ -94,6 +94,15 @@ class Settings(BaseSettings):
             "retry_backoff_max_seconds", "MEET_WORKER_RETRY_BACKOFF_MAX_SECONDS"
         ),
     )
+    # 本地模型(无按次账单;模型文件首次使用时下载并按镜像走)
+    embed_model: str = "BAAI/bge-m3"          # 输出 1024 维,与向量列一致
+    embed_device: str = "cpu"
+    embed_batch_size: int = 32
+    asr_model: str = "small"                  # faster-whisper 规格
+    asr_device: str = "cpu"
+    asr_compute_type: str = "int8"
+    asr_language: str = "zh"                  # 留空 = 自动检测
+
     # 音频切片时长(秒):切片边界即片段级时间信息来源
     slice_seconds: int = 10
 

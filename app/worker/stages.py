@@ -12,6 +12,7 @@
 """
 import concurrent.futures as cf
 import hashlib
+import io
 import time
 import wave
 from dataclasses import dataclass
@@ -349,7 +350,12 @@ def run_transcribe(eng, ctx: JobContext, epoch: int, asr: ASRProvider, should_ab
 
 
 def _read_slice_audio(eng, ctx: JobContext, slice_index: int) -> bytes:
-    """从原始 WAV 提取分片字节(音频文件为不可变原件,只读)。"""
+    """从原始 WAV 提取分片,重新封装为**自描述 WAV 容器**后交给 Provider。
+
+    音频文件本身仍只读不可变;这里只是切片加头。带 RIFF 头是必需的:
+    采样率/声道/位宽必须由音频本身体现,Provider 不能靠约定猜(猜错采样率
+    识别结果就是噪音)。裸 PCM 对 mock 无影响(只计字节数)。
+    """
     with eng.connect() as conn:
         row = conn.execute(
             text(
@@ -360,11 +366,18 @@ def _read_slice_audio(eng, ctx: JobContext, slice_index: int) -> bytes:
         ).fetchone()
     start_ms, end_ms = row
     with wave.open(ctx.file_path, "rb") as w:
-        rate = w.getframerate()
+        rate, channels, width = w.getframerate(), w.getnchannels(), w.getsampwidth()
         start_f = start_ms * rate // 1000
         end_f = end_ms * rate // 1000
         w.setpos(start_f)
-        return w.readframes(end_f - start_f)
+        frames = w.readframes(end_f - start_f)
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as out:
+        out.setnchannels(channels)
+        out.setsampwidth(width)
+        out.setframerate(rate)
+        out.writeframes(frames)
+    return buf.getvalue()
 
 
 # ---------- minutes ----------

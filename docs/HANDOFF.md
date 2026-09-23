@@ -73,16 +73,18 @@ $env:LLM_PROVIDER="deepseek"; .\.venv\Scripts\python.exe demo/seed_demo.py --res
 
 ## 4. 当前真实模型组合与解锁条件
 
-| 环节 | 现状 | 解锁条件 |
+| 环节 | 现状 | 备注 |
 |---|---|---|
-| LLM | **真实** DeepSeek `deepseek-chat`(密钥来自环境变量 `DEEPSEEK_API_KEY`) | 已可用 |
-| Embedding | mock(字符 bigram 哈希,1024 维) | 任一 OpenAI 兼容 embeddings 服务商可用余额;`BAAI/bge-m3` 维度 1024 与向量列一致,可直接接 |
-| ASR | mock + 人工转写导入 | 服务商可用余额;需实现 `ASRProvider` 适配器(按 10 秒分片调用) |
+| LLM | **真实** DeepSeek `deepseek-chat`(密钥来自环境变量 `DEEPSEEK_API_KEY`) | 已可用;tokens 为服务商口径,金额未配单价表 → `unknown` |
+| Embedding | **真实** 本地 `BAAI/bge-m3`(`EMBED_PROVIDER=bge-m3`) | 权重经 hf-mirror 下载;实测 1024 维 = 向量列;换模型必须重校准阈值(D-48) |
+| ASR | **本轮不启用**(仍 mock + 人工转写导入) | 云端 402;本地 `ASR_PROVIDER=whisper` 代码已就绪但实测中文专名错译明显(D-50),音频一律标注为静音占位 |
 
 2026-09-23 实测:SiliconFlow 的 ASR 与 Embedding 接口返回
 `402 account balance insufficient`(账户余额不足),故本轮未接入。
-**在真实 Embedding 接入前,任何"检索效果提升"的结论都不成立**;
-当前能说的是:纪要与问答的语义判断由真实模型完成,权限/引用/恢复/记账链路正确。
+**真实 Embedding 已接入(本地 bge-m3)**,但样本只有 2 场会谈:
+`demo/verify_real_embedding.py` 的 5 项断言全部通过、dev 的 4 个金标问题
+top1 均命中证据句(相似度 0.71~0.82,无答案探针最高 0.55)——
+这些是**具体断言成立**,不是整体准确率或召回率。
 
 ## 5. 已完成(有测试或脚本证据)
 
@@ -133,6 +135,8 @@ $env:LLM_PROVIDER="deepseek"; .\.venv\Scripts\python.exe demo/seed_demo.py --res
 | 数据库导出 | `demo/db_export/meeting_evidence_demo.sql`(含演示数据;`pg_dump`) |
 | 上传原件 | `storage/uploads/`(不入库,`.gitignore` 排除;需与导出配套保存) |
 | 评测报告 | `eval/reports/*.json`(运行时产物,`.gitignore` 排除;可重跑生成) |
+| 真实 Embedding 验证工件 | `demo/verification/real_embedding.json`(维度、索引重建不变量、dev 相似度分布、五项验证、model_run 台账) |
+| 语音合成脚本(ASR 备用) | `demo/make_demo_audio.py`(本机 TTS 合成 12 句 × 10s;本轮不用于演示) |
 | 密钥 | 只在 `.env` / 环境变量,**不进 Git**(`.env.example` 是模板) |
 
 恢复演示数据(不依赖导出文件):直接跑 `demo/seed_demo.py --reset`。

@@ -47,8 +47,11 @@ async function loadMeta() {
     const m = await api("/meta");
     const p = m.providers;
     el.innerHTML = ["asr", "llm", "embed"].map((k) =>
-      tag(`${k.toUpperCase()} ${p[k].model}`, !p[k].is_mock)).join(" ");
-    el.title = m.asr_note || "";
+      tag(`${k.toUpperCase()} ${p[k].model}`, !p[k].is_mock)).join(" ")
+      + tag(`证据阈值 ${m.retrieval.evidence_threshold}`,
+            !p.embed.is_mock && m.retrieval.evidence_threshold > 0.3);
+    el.title = (m.asr_note || "") + " | "
+      + (m.retrieval.threshold_note || "");
   } catch (e) {
     el.textContent = "模型配置不可用:" + e.message;
     el.classList.add("err");
@@ -161,10 +164,16 @@ const SOURCE_LABEL = {
 };
 
 function transcriptLabel(r) {
-  if (!r.transcript_source) return '<span class="hint">尚无转写版本</span>';
-  const mock = r.transcript_source === "asr";   // asr 版本由当前配置的 ASR 产出
-  return `v${r.transcript_version_no} · ${esc(SOURCE_LABEL[r.transcript_source] || r.transcript_source)}`
-    + (mock ? ' <span class="tag mock">来自 mock ASR</span>' : "");
+  if (!r.transcript_source) {
+    return '<span class="hint">尚无转写版本</span> · 音频为静音占位,未做语音识别';
+  }
+  const src = r.transcript_source;
+  const human = src.startsWith("human");
+  let label = `v${r.transcript_version_no} · ${esc(SOURCE_LABEL[src] || src)}`;
+  // 人工转写路径下,音频只用于切片与时间轴,必须说明"未做语音识别"
+  if (human) label += ' <span class="tag mock">音频=静音占位(未做 ASR)</span>';
+  if (src === "asr") label += ' <span class="tag mock">来自 mock ASR</span>';
+  return label;
 }
 
 function pollJob(jobId) {

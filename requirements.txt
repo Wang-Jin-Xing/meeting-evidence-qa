@@ -10,3 +10,9 @@ pytest==8.3.5
 pyjwt==2.10.1
 pgvector==0.3.6
 python-multipart==0.0.20
+
+# 本地模型(可选:ASR_PROVIDER=whisper / EMBED_PROVIDER=bge-m3 时需要)
+torch>=2.2
+torchvision>=0.17
+sentence-transformers>=3.0
+faster-whisper>=1.0
