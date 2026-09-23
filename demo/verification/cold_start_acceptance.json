@@ -1,0 +1,47 @@
+{
+  "title": "冷启动与最终验收(项6 第 1、2、3 条)",
+  "generated_at": "2026-09-23T19:04:45",
+  "git_rev": "8a2eba5",
+  "worktree_dirty": false,
+  "procedure": [
+    "停:API 与 worker 进程(按命令行匹配,不误伤其他 python)→ docker stop mes-pg",
+    "确认全停:/health/ready 连接失败(000),容器不再出现在 docker ps",
+    "起:docker start mes-pg → 轮询到 healthy → scripts/dev_up.ps1 拉起 API + 独立 worker"
+  ],
+  "startup_evidence": {
+    "readiness": {
+      "status": "ok",
+      "database": "up"
+    },
+    "worker_banner": "asr=faster-whisper:small@int8(mock=False) | llm=deepseek-chat(mock=False) | embed=BAAI/bge-m3(local)(mock=False)",
+    "api_meta_same": true,
+    "evidence_threshold": 0.66
+  },
+  "post_start_read_checks": {
+    "登录 /auth/login": "200",
+    "GET /meta": "asr/llm/embed 均 is_mock=false,与 worker 侧一致",
+    "GET /meetings/6/minutes": "200,两个版本 [v1 ai_draft confirmed by#6] 与 [v2 human_edit pending_review] 并存",
+    "GET /recordings/6/audio": {
+      "无 Range": "200,5541164 字节,无 Content-Range",
+      "bytes=0-1023": "206,1024 字节,Content-Range bytes 0-1023/5541164",
+      "bytes=-2048": "206,2048 字节,Content-Range bytes 5539116-5541163/5541164",
+      "越界": "416 + Content-Range bytes */5541164",
+      "provenance_headers": {
+        "X-Audio-Source": "derived_16bit_pcm",
+        "X-Audio-Served-Bits": "16",
+        "X-Audio-Original-Bits": "24",
+        "X-Audio-Duration-Ms": "28860"
+      },
+      "cross_check": "副本时长 28860ms 与原件实测 28.86s 一致;字节数 5541164 ≈ 原件 8311724 × 2/3(24→16-bit)"
+    },
+    "POST /meetings/6/ask": "200,有回答并带引用 (segment 60, similarity 0.7467, recording_id 6)"
+  },
+  "data_survived": {
+    "meetings_visible_to_admin": 5,
+    "note": "冷启动只重启进程与库,不写数据;7 条会谈/7 条录音台账未变"
+  },
+  "known_limits": [
+    "验收只覆盖读链路与 HTTP 语义;回放的声音本身是否可听由浏览器端实测(已实测 10s→20.19s 自停)",
+    "cold start 首次问答含 bge-m3 冷加载,时延不代表稳态"
+  ]
+}
