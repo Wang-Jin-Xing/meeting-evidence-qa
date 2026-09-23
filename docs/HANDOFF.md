@@ -136,7 +136,7 @@ top1 均命中证据句(相似度 0.71~0.82,无答案探针最高 0.55)——
 | 上传原件 | `storage/uploads/`(不入库,`.gitignore` 排除;需与导出配套保存) |
 | 评测报告 | `eval/reports/*.json`(运行时产物,`.gitignore` 排除;可重跑生成) |
 | 真实 Embedding 验证工件 | `demo/verification/real_embedding.json`(维度、索引重建不变量、dev 相似度分布、五项验证、model_run 台账) |
-| 真实音频链路工件 | `demo/verification/real_audio_会议录音.json` + `demo/corpus/会议录音.asr.json`(ASR 原始输出含错误) + `demo/questions_real_meeting.json` |
+| 真实音频链路工件 | `demo/verification/real_audio_会议录音.json`(A=原始 ASR / B=人工校对 双链路逐题对比 + **阈值前相似度**) + `demo/corpus/会议录音.asr.json`(ASR 原始输出含错误) + `会议录音.corrected.json`(金标)+ `会议录音.校对说明.md`(每处改动的确认依据)+ `demo/questions_real_meeting.json` |
 | 应用库备份 | `backups/meeting_evidence_before_real_audio.sql`(加真实录音数据前) |
 | 应用入口验收工件 | `demo/verification/entry_acceptance_job6.json`(网页上传→持久化任务→**独立 worker** 四阶段→界面展示;两侧生效模型、阶段完成间隔、model_run 台账、界面原文引用与不可测项口径) |
 | 语音合成脚本(ASR 备用) | `demo/make_demo_audio.py`(本机 TTS 合成 12 句 × 10s;本轮不用于演示) |

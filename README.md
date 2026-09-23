@@ -108,8 +108,8 @@ Remove-Item Env:ASR_PROVIDER,Env:LLM_PROVIDER,Env:EMBED_PROVIDER,Env:QA_EVIDENCE
 ### 真实录音端到端(本地 ASR + 本地 Embedding + DeepSeek)
 
 ```powershell
-$env:ASR_PROVIDER="whisper"; $env:EMBED_PROVIDER="bge-m3"; $env:LLM_PROVIDER="deepseek"
-$env:QA_EVIDENCE_THRESHOLD="0.66"; $env:HF_ENDPOINT="https://hf-mirror.com"
+# 模型组合与阈值已在 .env 中配好(whisper / deepseek / bge-m3 / 0.66),
+# 无需在终端设任何 $env: 变量;权重走 hf-mirror。
 .\.venv\Scripts\python.exe demo/ingest_real_recording.py --audio "C:/.../会议录音.wav"     --questions demo/questions_real_meeting.json
 ```
 
@@ -118,10 +118,18 @@ $env:QA_EVIDENCE_THRESHOLD="0.66"; $env:HF_ENDPOINT="https://hf-mirror.com"
 `demo/corpus/<名>.asr.json`,报告存 `demo/verification/real_audio_<名>.json`
 (含音频参数、各阶段耗时与设备、引用与相似度、成本口径)。
 加 `--corrected 校对稿.json` 会另建一个隔离会谈发布校对版本做双链路对比,
-主展示会谈保持原始 ASR 不被替换。
+主展示会谈保持原始 ASR 不被替换。**跑之前要先停常驻 worker**
+(`scripts/dev_up.ps1` 起的两个进程):脚本自己领取任务,被抢到会直接报错退出。
 
-首轮实测(单样本,不代表整体准确率):识别错误如"布齐/北迅时间/没有报告"
-原样保留;实体问句 3/5 命中,2 问因识别错误导致证据不足(详见 D-55)。
+双链路实测(`--corrected demo/corpus/会议录音.corrected.json`,会谈 #7 vs #8,
+模型/提示词/问题/阈值 0.66 全固定;逐处校对依据见 `会议录音.校对说明.md`):
+校对把 5 题的最高相似度**全部**抬升(+0.031~+0.127),并把 A 侧答案里的错字
+("张公傅责")修成正确文本("张工负责")—— 这一层是 **ASR 错误的影响**。
+但"什么时间之前要补齐""保修时间确定了吗"两问校对后**仍**判证据不足,
+最高相似度 0.5681 / **0.6566** 都低于 0.66,而排序第一名恰是应引用的那片:
+这两问失败的原因要改判为**阈值相对短疑问句偏高**,不再是 ASR(详见 D-59)。
+本轮按指示**不调阈值**,连同"泛化问句召回为 0"一起留作下一阶段待解案例。
+以上均为单条录音、5 个问题,不构成整体准确率。
 
 启用真实 Embedding(本地,无需任何密钥与余额):把 `.env` 中
 `EMBED_PROVIDER=bge-m3`、`LLM_PROVIDER=deepseek`、`QA_EVIDENCE_THRESHOLD=0.66`、
