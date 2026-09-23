@@ -162,5 +162,24 @@
     "upload_accepted_at": "2026-09-23 05:09:59",
     "index_finished_at": "2026-09-23 05:10:36.004",
     "accept_to_indexed_seconds": 37.0
+  },
+  "duplicate_upload": {
+    "verified_at": "2026-09-23T17:39:51",
+    "how": "同一份 会议录音.wav 在网页上对会谈 #6 重复上传两次(修复前后各一次)",
+    "backend": "POST /meetings/6/recordings → 409,detail 结构化:{message, existing_recording_id:6, existing_job_id:6}",
+    "idempotency_evidence": "两次重复上传后 processing_job=7、recording=7、model_run=101、job_stage=28、transcript_version=10 均未变化(上传前基线 job=7 / 会谈 #6 录音=1)",
+    "defect_found_and_fixed": {
+      "问题": "前端 app.js 按 `r.duplicate` 分支渲染提示,但后端 UploadAccepted 根本没有 duplicate 字段、重复上传走的是 409;于是界面把幂等拒绝当成裸错误弹出 '409 {\"message\":...}'。那个分支是照着不存在的接口写的死代码。",
+      "修法": "api() 抛出时带上 status 与结构化 detail;上传处理器识别 409+existing_job_id 并按**正常提示**(非红色错误)显示「内容重复:未新建任务,复用已有任务 #6」,失败仍走错误分支。",
+      "复验": "浏览器实测 toast 文案为「内容重复:未新建任务,复用已有任务 #6」,且不含 err 样式类;会谈详情仍只显示 1 个录音。",
+      "后端未改动": "409 语义与既有测试 test_duplicate_upload_returns_409 保持一致,未改接口契约。"
+    }
+  },
+  "restart_from_stopped": {
+    "note": "本轮真实经历:磁盘压力导致 Docker 引擎掉线(mes-pg 变 Exited 255),按 docker start mes-pg → 等 healthy → scripts/dev_up.ps1 起 API+worker 恢复;恢复后 7 条会谈与台账计数完好,等同完成'从停止状态重启数据库/API/worker'的验证。",
+    "readiness": {
+      "status": "ok",
+      "database": "up"
+    }
   }
 }

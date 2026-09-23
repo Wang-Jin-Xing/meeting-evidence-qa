@@ -21,7 +21,12 @@ async function api(path, opts = {}) {
     const detail = data && data.detail
       ? (typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail))
       : resp.statusText;
-    throw new Error(`${resp.status} ${detail}`);
+    // 把状态码与结构化 detail 一起带出来:调用方需要区分"真失败"与
+    // "幂等拒绝"(如重复录音返回 409 + 已有任务号),不能一律当错误显示。
+    const err = new Error(`${resp.status} ${detail}`);
+    err.status = resp.status;
+    err.detail = (data && typeof data.detail === "object") ? data.detail : null;
+    throw err;
   }
   return data;
 }
@@ -217,10 +222,21 @@ document.getElementById("btn-upload").addEventListener("click", async () => {
   fd.append("file", f);
   try {
     const r = await api(`/meetings/${state.meetingId}/recordings`, { method: "POST", body: fd });
-    toast(r.duplicate ? "内容重复:返回已有任务 " + r.job_id : "已受理,任务 " + r.job_id);
+    toast("已受理,任务 " + r.job_id);
+  } catch (e) {
+    // 幂等拒绝不是故障:同一会谈内内容相同的录音不会重复建任务,复用已有任务即可。
+    const dup = e.status === 409 && e.detail && e.detail.existing_job_id;
+    if (dup) {
+      toast(`内容重复:未新建任务,复用已有任务 #${e.detail.existing_job_id}`, false);
+    } else {
+      toast(e.message, true);
+      return;
+    }
+  }
+  try {
     const m = await api(`/meetings/${state.meetingId}`);
     renderRecordings(m.recordings || []);
-  } catch (e) { toast(e.message, true); }
+  } catch (e) { toast("刷新会谈失败:" + e.message, true); }
 });
 
 /* ---------- 人工转写导入 ---------- */
