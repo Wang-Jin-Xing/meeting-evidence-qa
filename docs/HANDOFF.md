@@ -129,6 +129,12 @@ top1 均命中证据句(相似度 0.71~0.82,无答案探针最高 0.55)——
   本机因此只剩 8GB 并把 Docker 引擎压到掉线;`scripts/dev_up.ps1` 之外也要保证 `.env` 有值。
 - **`model_run.tokens_in` 只对远程 LLM 有 token 含义**:本地 ASR/Embedding 行自 D-58
   起为 NULL,历史行仍是字节/条数,跨行汇总前先排除本地行,否则数字完全没意义。
+- **改了判定规则必须回头重跑基线**:型号归属闸的弱版本(型号出现在任一引用里即可)
+  在冻结 dev 的 mock 基线上误报依旧是 1,因为同一段语料里另一句确实提到了该型号。
+  只有重跑才发现,见 D-65。
+- **Docker 引擎会被 C 盘压力压到掉线(已两次)**:`mes-pg` 变 Exited 255,测试直接连不上库。
+  本项目权重已在 D 盘,但 Docker 自身虚拟盘(约 5.2GB)与用户 Temp(约 2.5GB)仍在 C 盘。
+  恢复顺序:`docker start mes-pg` → 等 healthy → `scripts/dev_up.ps1`。
 - **`<audio>` 发不出 Authorization 头**:别为此把 JWT 塞进 URL(会进浏览器历史与
   访问日志);界面用带鉴权的 fetch 取 blob 播放。
 
