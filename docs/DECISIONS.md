@@ -61,7 +61,9 @@
 
 - **D-60 模型权重与包缓存必须显式指盘,否则静默写满系统盘**:huggingface_hub 只认
   `HF_HOME`,而 `.env` 的值不进 `os.environ`,因此不设就一直往 `C:\Users\...\.cache` 里堆
-  —— 本机实测堆到 4.8GB 时 C 盘仅剩 8.1GB(97% 满),并连带把 Docker Desktop 引擎压到掉线
+  —— 本机实测堆到 4.8GB 时 C 盘仅剩 8.1GB(97% 满);同期 Docker Desktop 引擎退出两次,
+  但日志里**没有 ENOSPC/磁盘满记录**(是该机 9/11 起反复出现的 `backend process exited`),
+  不能归因于磁盘,当时的因果是我推断错的
   (`mes-pg` 变 Exited 255,测试直接连不上库)。现把权重目录纳入同一份 `.env`
   (`HF_HOME`,代码不写死盘符),由 `apply_hf_env` 在加载前应用,与 `HF_ENDPOINT` 共用一个入口;
   留空 = 不干预库默认。迁移经完整校验:复制到 `D:/model-cache/huggingface` 后 31 个文件
