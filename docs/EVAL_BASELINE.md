@@ -10,7 +10,7 @@
 
 | 项 | 值 | 口径 |
 |---|---|---|
-| `pytest -q` | **138 passed / 3 skipped** | 独立测试库(`TEST_DATABASE_URL`,会话独占锁) |
+| `pytest -q` | **141 passed / 3 skipped** | 独立测试库(`TEST_DATABASE_URL`,会话独占锁) |
 | 测试文件 | 20 个 `tests/test_*.py` | 含真实子进程 worker 的故障注入/接管 |
 | 真 Provider 集成 | 显式 `MEET_TESTS_USE_REAL_PROVIDERS=1` 时 **3 passed** | 默认 skipped:避免每次全量测试加载 2.3GB 权重 |
 | 权限探针 | 5/5 通过(mock 基线报告内) | 跨机构、restricted、发布指针、音频接口四路 |

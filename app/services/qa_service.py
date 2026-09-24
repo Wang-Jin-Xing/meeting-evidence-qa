@@ -10,6 +10,7 @@
 - 每次问答(无论是否充分)写 query_log 审计。
 """
 import hashlib
+import re
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -79,6 +80,62 @@ def retrieve_candidates(
         .limit(top_k)
     )
     return db.execute(stmt).all()
+
+
+_MODEL_CODE_RE = re.compile(r"[A-Za-z]{1,4}\d{2,4}[A-Za-z]?")
+
+
+def model_codes(text: str) -> set[str]:
+    """文本里出现的设备型号代号(统一大写、去分隔符)。"""
+    return {m.group(0).upper() for m in _MODEL_CODE_RE.finditer(text.replace("-", "")
+                                                                .replace("_", "").replace(" ", ""))}
+
+
+_CLUE_UNIT = r"(年|个月|天|周|工作日|小时|分钟|人份|度|摄氏度)"
+
+
+def _clue_asked(question: str):
+    """问题在问哪类线索(与 mock 的焦点线索规则同一分类,便于两条路径同口径)。
+
+    返回 None = 不属任何可核验线索类,此时只要求型号同句出现,不做线索判断。
+    """
+    if "谁" in question or "负责" in question:
+        return lambda t: "负责" in t
+    if any(k in question for k in ("什么时候", "几号", "哪天", "日期", "时间")):
+        return lambda t: bool(re.search(r"\d{1,2}月\d{1,2}[日号]|\d{4}年\d{1,2}月", t))
+    if any(k in question for k in ("多久", "多长", "几天", "几年", "期限")):
+        return lambda t: bool(re.search(rf"\d+\s*{_CLUE_UNIT}", t))
+    if any(k in question for k in ("多少", "几盒", "价格", "报价", "单价", "费用", "钱")):
+        return lambda t: bool(re.search(r"\d", t))
+    return None
+
+
+def focus_mismatch(question: str, cited_texts: list[str]) -> bool:
+    """型号归属不成立:没有任何一段被引用的证据**同时**满足
+    ①含问题点名的型号 ②含问题所要的那类线索。
+
+    为什么必须两层都查:只查"型号在不在证据里"会被同一会议里的其他句子蒙过去 ——
+    实测 D-32 反例("X300 的注册证什么时候补齐?")就通过了弱版闸,
+    因为语料里另有一句"X300 型号的保修期是多久?"确实提到了 X300,
+    但它回答的不是注册证日期。真正的问题是**把 X200 的日期安到 X300 头上**,
+    所以必须要求型号与线索在同一句里共现。
+
+    为什么必须是确定性的一道闸,而不是交给模型自觉:
+    - mock 的焦点线索规则只看"负责人/日期/时长"有没有线索,**不看型号**;
+    - 真实 LLM 是否会拒取决于提示词与采样,换模型/换版本就可能翻转 ——
+      而"把 A 型号的承诺安到 B 型号头上"是本业务里代价最高的一类错。
+    问题没点名型号时本闸不介入(避免把"谁负责培训"这类可答题误判为不足)。
+    """
+    asked = model_codes(question)
+    if not asked:
+        return False
+    clue = _clue_asked(question)
+    for t in cited_texts:
+        if not (asked & model_codes(t)):
+            continue
+        if clue is None or clue(t):
+            return False
+    return True
 
 
 def ask_question(db: Session, user: User, meeting: Meeting, question: str) -> AnswerOut:
@@ -179,6 +236,11 @@ def ask_question(db: Session, user: User, meeting: Meeting, question: str) -> An
 
     cited_map = {c.segment_id: c for c in qc}
     citations = [cited_map[sid] for sid in result.cited_segment_ids]
+
+    # 充分性第三层(与 Provider 无关):型号归属闸。
+    # 问题点名的型号在证据里根本没出现 → 这段证据说的不是它,不能答。
+    if focus_mismatch(question, [c.text for c in citations]):
+        return insufficient()
 
     _log_query(
         db, user, question, rows, relevant=len(candidates),

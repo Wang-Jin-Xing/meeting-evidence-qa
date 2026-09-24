@@ -36,7 +36,7 @@
 | 证据可回溯、引用即原文 | 界面点开纪要证据 → `SEG-xx [10s–20s]` + 原文 + 相似度;点「播放本片段」只播那 10 秒 |
 | 不覆盖原始输出 | 网页上把 `张公傅责` 改成 `张工负责` 另存新版 → 历史列表 `v1 ai_draft confirmed` 与 `v2 human_edit pending_review` 并排 |
 | worker 可恢复 | `docker exec` 查 `processing_job.locked_by / lease_epoch`,或跑 `tests/test_recovery.py` |
-| 测试是真的 | `pytest -q` → 138 passed / 3 skipped;3 条真 Provider 集成测试显式开关下 3 passed |
+| 测试是真的 | `pytest -q` → 141 passed / 3 skipped;3 条真 Provider 集成测试显式开关下 3 passed |
 | 数字不是编的 | `demo/verification/real_audio_会议录音.json` 里 `similarity_before_threshold` 有逐题 A/B 相似度与 Δ;评测报告含 git 脏标记与数据集 sha256 |
 | 知道失败在哪 | `docs/DECISIONS.md` D-59(改判为阈值)、D-55(识别错误原样保留)、`PROJECT_SUMMARY.md` §4 失败清单 |
 

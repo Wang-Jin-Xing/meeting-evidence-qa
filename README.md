@@ -284,7 +284,7 @@ P3 首版(可演示、可复现、可交接):
   确认写在版本行上(`confirmed_by/confirmed_at`),编辑后需重新确认,
   基于陈旧版本的编辑返回 409 而非静默覆盖
 
-当前状态补充(测试数量以最近一次运行为准):`pytest -q` → **138 passed / 3 skipped**;
+当前状态补充(测试数量以最近一次运行为准):`pytest -q` → **141 passed / 3 skipped**;
 3 条 skipped 是真实 Provider 集成测试,显式设 `MEET_TESTS_USE_REAL_PROVIDERS=1` 时实测 3 passed
 (默认跳过是为了不让每次全量测试都加载 2.3GB 权重)。
 

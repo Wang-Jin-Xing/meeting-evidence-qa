@@ -447,3 +447,63 @@ def test_get_minutes_restricted_whitelisted_passes_access(client, session, two_o
     )
     assert resp.status_code == 404
     assert resp.json()["detail"] == "纪要尚未生成"
+
+
+# ---------- 型号归属闸(与 Provider 无关的确定性充分性第三层) ----------
+
+def test_model_codes_normalization_and_focus_mismatch():
+    from app.services.qa_service import focus_mismatch, model_codes
+
+    assert model_codes("X200整机保修2年,X300保修3年") == {"X200", "X300"}
+    assert model_codes("Y-500 与 A_300 对比") == {"Y500", "A300"}, "分隔符不得影响判定"
+    assert model_codes("合同生效后60天内交付") == set(), "纯数字不是型号"
+
+    # 问题没点名型号 → 不归本闸管(避免把可答题误判为不足)
+    assert focus_mismatch("培训由谁负责?", ["李经理:注册证由我们负责"]) is False
+    # 点名的型号在证据里出现 → 放行
+    assert focus_mismatch("X200的注册证什么时候补齐?",
+                          ["X200的注册证和检测报告我们会在5月20日之前补齐"]) is False
+    # 点名的型号在证据里完全没出现 → 拦
+    assert focus_mismatch("X300的注册证什么时候补齐?",
+                          ["X200的注册证和检测报告我们会在5月20日之前补齐"]) is True
+    # 关键:型号**在别处提到过**也没用 —— 必须与问题所要的线索同句共现。
+    # (弱版闸在这里会放行,因为第二句确实出现了 X300;这正是 D-32 反例的真实形态)
+    assert focus_mismatch("X300的注册证什么时候补齐?", [
+        "X200的注册证和检测报告我们会在5月20日之前补齐",
+        "X300型号的保修期是多久?和X200有区别吗",
+    ]) is True
+    # 同型号 + 同类线索同句出现 → 放行;对比型问题引到任一型号即算有依据
+    assert focus_mismatch("X300和X200的保修期分别是多久?",
+                          ["X200整机保修2年,X300保修3年"]) is False
+    # 问题没点型号 → 本闸不介入(哪怕线索也不在)
+    assert focus_mismatch("培训由谁负责?", ["李经理:注册证由我们负责"]) is False
+
+
+def test_ask_refuses_when_cited_evidence_is_about_another_model(client, qa_world):
+    """证据里有注册证和日期,但说的是 X200;问 X900 必须判证据不足。
+
+    这条断言的是**层级**:过阈候选 > 0 却仍被拒,说明拦住它的是归属闸,
+    不是"没检索到"。若哪天阈值或检索变了,这条要能区分开。
+    """
+    resp = client.post(
+        f"/meetings/{qa_world['meeting_a_id']}/ask",
+        json={"question": "X900的注册证什么时候补齐?"},
+        headers=auth_headers(client, qa_world["a_admin"]),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["relevant_candidate_count"] > 0, "前置:该问题应能检到相关片段"
+    assert body["has_sufficient_evidence"] is False
+    assert body["answer"] is None and body["citations"] == []
+
+
+def test_ask_still_answers_when_model_matches(client, qa_world):
+    """加闸不得把好答的题也一起拒掉:X200 的注册证问题必须仍有引用。"""
+    resp = client.post(
+        f"/meetings/{qa_world['meeting_a_id']}/ask",
+        json={"question": "X200的注册证什么时候补齐?"},
+        headers=auth_headers(client, qa_world["a_admin"]),
+    )
+    body = resp.json()
+    assert body["has_sufficient_evidence"] is True
+    assert body["citations"], "同型号问答不得被归属闸误伤"
