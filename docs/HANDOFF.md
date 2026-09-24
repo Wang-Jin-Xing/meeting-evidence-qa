@@ -12,27 +12,45 @@
 - 因此本项目可作为个人作品公开投递与演示;如需对外开源,发布前应再自查一次
   是否存在任何来自该公司的片段(搜索公司名、客户名、真实产品名)。
 
-### 0b. 脱敏公开版(2026-09-24 已构建,**本仓库仍是完整版**)
+### 0b. 脱敏公开版(2026-09-24 已构建)
 
-- 公开版在 `D:\医疗机构-public`(独立 git 仓库,42→40 次提交,已重写历史);
-  **本仓库(完整版)一个字没改**,两者不要混:改代码在本仓库,推 GitHub 从公开版推。
-- 重写方式:`git-filter-repo --invert-paths --paths-from-file` 删除 5 个真实语料工件
-  (`demo/corpus/会议录音.{asr,corrected}.json`、`会议录音.{待确认,校对说明}.md`、
-  `demo/verification/real_audio_会议录音.json`)+ `--replace-text` 全历史替换
-  真实整句转录、公司名、含用户名的绝对路径。输入文件在 `D:\desens\`。
-- 替换是**全历史**生效的,不是"最新提交里删掉";重写后 `git fsck --unreachable` 为 0,
-  旧 tip 在本副本中已不存在。备份:`D:\医疗机构_完整历史备份_含真实语料.bundle`
-  + 本仓库附注标签 `pre-public-freeze`。
-- 公开版新增 `demo/verification/real_audio_AB_summary.json`(只留数值:逐题阈值前
-  相似度、Δ、耗时、用量、成本口径,文本字段占位)与 `docs/PUBLICATION.md`
-  (删除清单、为什么转写也要删、因此不能声称什么、自查实际命中数)。
-- 公开版验证:`pytest -q` → **141 passed / 3 skipped**,与本仓库一致;
-  全历史 blob 扫描:用户名路径 0、公司名 0、真实整句 0、`sk-` 密钥 0、邮箱 0、手机号 0、
-  私钥/AKID 形态 0。文档里**故意保留**的只有 ASR 错字对照(如"识别错了哪几个字"),
-  它们不含会议业务事实。
-- 未决(要作者定):① 是否加 LICENSE(没加就是默认版权,考虑来源口径反而更稳);
-  ② 40 次提交的作者邮箱是 `〔提交者邮箱未公开〕`,推上去就公开,要不要换成
-  GitHub 的 noreply 邮箱(要换得再重写一次历史)。
+- 同一项目有**两个仓库**:母本(含真实语料工件,继续开发只在这里)与公开版
+  `D:\医疗机构-public`(推 GitHub 只从它推)。若你手上这份是公开版,母本里那些真实
+  语料工件**不在**这里 —— 清单与原因见 `docs/PUBLICATION.md`。
+- 公开版不是手工删出来的,是**投影**:`git-filter-repo --invert-paths` 从全部历史删掉
+  5 个真实语料工件(`demo/corpus/会议录音.{asr,corrected}.json`、
+  `会议录音.{待确认,校对说明}.md`、`demo/verification/real_audio_会议录音.json`),
+  再用 `--replace-text` 全历史替换真实整句转录、公司名、含用户名的绝对路径。
+  规则文件与脚本都在 `D:\desens\`。
+- 替换作用于**全部历史**,不是"最新提交里删掉";投影产物 `git fsck --unreachable` 为 0。
+  母本另有备份:`D:\医疗机构_完整历史备份_含真实语料.bundle` + 附注标签 `pre-public-freeze`。
+- 公开版比母本多一个**发布层**,由脚本重放生成:`real_audio_AB_summary.json`
+  (逐题阈值前相似度、Δ、耗时、用量、成本口径,文本字段占位)、`docs/PUBLICATION.md`、
+  以及把指向已删工件的引用改指摘要(规则见 `D:\desens\fix_refs.py`)。
+- 推送前有闸门 `D:\desens\gate_scan.py`:母本转写正文的任一字段值出现在公开版即拒绝。
+  它做过反向验证:塞进一句真实转录 → 退出码 1;删掉 → 通过。
+  公开版 `pytest -q` → 141 passed / 3 skipped,与母本一致。
+- 未决:① 是否加 LICENSE(不加即默认版权,考虑来源口径反而更稳);
+  ② 投影提交沿用提交者身份 `Wang-Jin-Xing <〔提交者邮箱未公开〕>`,推上去即公开,
+  要不要换成 GitHub 的 noreply 邮箱(要换得在首次推送前再投影一次)。
+
+### 0c. 以后改了代码怎么同步到公开版
+
+```powershell
+# 只同步 + 过闸门,不推:
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\desens\publish_sync.ps1
+# 确认无误后再加 -Push:
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\desens\publish_sync.ps1 -Push
+```
+
+它做六步:重新投影母本 → 把投影的文件树盖到公开版(不动它的 `.git`/`.env`/`storage`)→
+重放发布层 → 过闸门 → **追加**一个"同步母本 <sha>"提交 → 加 `-Push` 才推送。
+公开版历史只追加、不重写,所以永远不需要 force push。若你在公开版手工改过东西,
+`fix_refs.py` 会因为"原文命中 0 次"停下 —— 把那份改动挪回母本再同步,别在公开版里直接编辑。
+
+**纪律**:母本里凡是真实录音衍生出的新工件,一律落在 `demo/corpus/` 或
+`demo/verification/real_audio_*.json` 这两个已被投影规则覆盖的位置;放到别处就得先往
+`D:\desens\drop-paths.txt` 补一行,否则闸门以外的路径可能漏出去。
 
 ## 1. 一分钟启动
 
