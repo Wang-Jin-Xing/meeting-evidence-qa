@@ -132,8 +132,10 @@ top1 均命中证据句(相似度 0.71~0.82,无答案探针最高 0.55)——
 - **改了判定规则必须回头重跑基线**:型号归属闸的弱版本(型号出现在任一引用里即可)
   在冻结 dev 的 mock 基线上误报依旧是 1,因为同一段语料里另一句确实提到了该型号。
   只有重跑才发现,见 D-65。
-- **Docker 引擎会被 C 盘压力压到掉线(已两次)**:`mes-pg` 变 Exited 255,测试直接连不上库。
-  本项目权重已在 D 盘,但 Docker 自身虚拟盘(约 5.2GB)与用户 Temp(约 2.5GB)仍在 C 盘。
+- **Docker 后端会自己退出,别误判原因**:本会话内遇到两次(`mes-pg` 变 Exited 255,测试连不上库)。
+  查过日志:**没有 ENOSPC/磁盘满的记录**,而是 `Docker Desktop.exe.log` 里 9/11 起反复出现的
+  `backend process exited: exit status 0x40010004`(本机既有模式,不是本项目造成的)。
+  我曾把这条写成"被 C 盘压力压掉线",那是未证实的因果,已更正。
   恢复顺序:`docker start mes-pg` → 等 healthy → `scripts/dev_up.ps1`。
 - **`<audio>` 发不出 Authorization 头**:别为此把 JWT 塞进 URL(会进浏览器历史与
   访问日志);界面用带鉴权的 fetch 取 blob 播放。
