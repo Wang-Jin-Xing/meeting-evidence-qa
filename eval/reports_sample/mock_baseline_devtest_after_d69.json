@@ -1,0 +1,398 @@
+{
+  "meta": {
+    "timestamp": "2026-09-25T04:57:00.438066+00:00",
+    "git": {
+      "available": true,
+      "rev": "3130e2e6adfe8023f26152cb8b1de5fe73efd45d",
+      "branch": "main",
+      "dirty": false,
+      "modified_files": [],
+      "untracked_files": [],
+      "content_fingerprint": "e3b0c44298fc1c14",
+      "note": "dirty=True 表示本报告部分代码未提交,仅凭 rev 无法复现;content_fingerprint 覆盖未提交改动内容"
+    },
+    "database": "meeting_evidence",
+    "dataset": {
+      "path": "D:\\医疗机构\\eval\\dataset.json",
+      "version": "eval-v2",
+      "sha256": "ed140300bbe7f6a1",
+      "split_by": "meeting"
+    },
+    "provider_config": {
+      "asr": "mock",
+      "llm": "mock",
+      "embed": "mock"
+    },
+    "providers": {
+      "asr": "mock-asr-v1",
+      "llm": "mock-llm-rules-v1",
+      "embed": "mock-embed-bigram-v1"
+    },
+    "providers_detail": {
+      "asr": {
+        "name": "mock-asr",
+        "model": "mock-asr-v1",
+        "is_mock": true
+      },
+      "llm": {
+        "name": "mock-llm",
+        "model": "mock-llm-rules-v1",
+        "is_mock": true,
+        "prompt_version": "mock-rules-v1"
+      },
+      "embed": {
+        "name": "mock-embed",
+        "model": "mock-embed-bigram-v1",
+        "is_mock": true,
+        "dim": 1024
+      },
+      "all_mock": true
+    },
+    "prompt_version": "mock-rules-v1",
+    "embedding_dim": 1024,
+    "vector_dim_note": "向量列维度固定 1024;Provider 声明维度须与之一致,不符时工厂直接报错(需迁移重建,见 D-03)",
+    "transcript_mode": "asr",
+    "transcript_mode_note": "human_corrected=问答基于人工校对转写(隔离 ASR 误差);asr=基于流水线转写输出(端到端,含 ASR 误差)",
+    "retrieval": {
+      "top_k": 5,
+      "evidence_threshold": 0.15
+    },
+    "elapsed_seconds": 6.0,
+    "is_mock": true,
+    "cost": {
+      "runs_by_status": {
+        "succeeded": 49
+      },
+      "by_basis": {
+        "unknown": {
+          "calls": 49,
+          "priced_calls": 0,
+          "sum_cents": null
+        }
+      },
+      "unpriced_real_calls": 0,
+      "budget_cents": [
+        null,
+        null
+      ],
+      "note": "cost_basis=unknown 的行成本为 NULL(未知),不按 0 计入;mock 调用恒为 unknown,不得据此声称真实调用零成本"
+    },
+    "declaration": "mock Provider 基线:仅证明评测流程与数据链路正确,不用于声称真实效果提升;反例误报为待真实模型验证的测量对象(D-32)"
+  },
+  "splits": {
+    "dev": {
+      "questions": [
+        {
+          "qid": "dev_q1_registration_date",
+          "question": "X200的注册证什么时候补齐?",
+          "category": null,
+          "latency_ms": 123.7,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 4,
+          "citation_count": 4,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "dev_q2_warranty_duration",
+          "question": "整机保修期多长?",
+          "category": null,
+          "latency_ms": 36.9,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 1,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "dev_q3_training_owner",
+          "question": "培训由谁负责?",
+          "category": null,
+          "latency_ms": 34.2,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 1,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "dev_q4_consumables_date",
+          "question": "耗材清单什么时候发?",
+          "category": null,
+          "latency_ms": 48.1,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 1,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "dev_neg_model_mismatch",
+          "question": "X300的注册证什么时候补齐?",
+          "category": "型号错配+日期归属",
+          "latency_ms": 43.7,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 3,
+          "citation_count": 0,
+          "expected": "no_answer",
+          "correct": true,
+          "false_positive": false
+        },
+        {
+          "qid": "dev_neg_no_topic",
+          "question": "明年的采购预算是多少?",
+          "category": "无答案",
+          "latency_ms": 22.5,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 0,
+          "citation_count": 0,
+          "expected": "no_answer",
+          "correct": true,
+          "false_positive": false
+        }
+      ],
+      "summary": {
+        "total": 6,
+        "answer_questions": 4,
+        "evidence_hit_rate": 1.0,
+        "answer_hit_rate": 1.0,
+        "missed_rate": 0.0,
+        "no_answer_questions": 2,
+        "no_answer_correct_rate": 1.0,
+        "no_answer_false_positive_rate": 0.0,
+        "latency_ms": {
+          "avg": 51.5,
+          "p95": 123.7,
+          "max": 123.7,
+          "n": 6
+        },
+        "by_category": {
+          "normal": {
+            "n": 4,
+            "answer_n": 4,
+            "answer_correct": 4,
+            "no_answer_n": 0,
+            "no_answer_correct": 0,
+            "false_positive": 0
+          },
+          "型号错配+日期归属": {
+            "n": 1,
+            "answer_n": 0,
+            "answer_correct": 0,
+            "no_answer_n": 1,
+            "no_answer_correct": 1,
+            "false_positive": 0
+          },
+          "无答案": {
+            "n": 1,
+            "answer_n": 0,
+            "answer_correct": 0,
+            "no_answer_n": 1,
+            "no_answer_correct": 1,
+            "false_positive": 0
+          }
+        }
+      },
+      "permission_probes": [
+        {
+          "pid": "dev_p1_cross_org",
+          "kind": "cross_org",
+          "category": "越权-跨机构",
+          "question": "X200的注册证什么时候补齐?",
+          "expected_status": 404,
+          "status": 404,
+          "correct": true,
+          "citations_within_meeting": null
+        },
+        {
+          "pid": "dev_p2_same_org_not_whitelisted",
+          "kind": "same_org_plain_user",
+          "category": "越权-同机构非白名单",
+          "question": "X200的注册证什么时候补齐?",
+          "expected_status": 404,
+          "status": 404,
+          "correct": true,
+          "citations_within_meeting": null
+        },
+        {
+          "pid": "dev_p3_whitelisted_allowed",
+          "kind": "whitelisted",
+          "category": "越权-白名单正向对照",
+          "question": "X200的注册证什么时候补齐?",
+          "expected_status": 200,
+          "status": 200,
+          "correct": true,
+          "citations_within_meeting": true
+        }
+      ],
+      "permission_summary": {
+        "n": 3,
+        "correct": 3
+      }
+    },
+    "test": {
+      "questions": [
+        {
+          "qid": "test_q1_price",
+          "question": "Y500每台报价多少?",
+          "category": null,
+          "latency_ms": 47.1,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 3,
+          "citation_count": 3,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "test_q2_repair_sla",
+          "question": "报修后多久上门?",
+          "category": null,
+          "latency_ms": 44.6,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 1,
+          "citation_count": 1,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "test_q3_delivery",
+          "question": "合同签订后多久交付?",
+          "category": null,
+          "latency_ms": 48.5,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 2,
+          "citation_count": 2,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "test_neg_negation",
+          "question": "Y300可以折价回收吗?",
+          "category": null,
+          "latency_ms": 40.0,
+          "has_sufficient_evidence": true,
+          "relevant_candidate_count": 3,
+          "citation_count": 3,
+          "expected": "answer",
+          "evidence_hit": true,
+          "answer_hit": true,
+          "correct": true,
+          "missed": false
+        },
+        {
+          "qid": "test_neg_model_mismatch",
+          "question": "Y300的报价是多少?",
+          "category": "型号错配",
+          "latency_ms": 36.2,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 4,
+          "citation_count": 0,
+          "expected": "no_answer",
+          "correct": true,
+          "false_positive": false
+        },
+        {
+          "qid": "test_neg_date_attribution",
+          "question": "Y300的发票什么时候开?",
+          "category": "日期归属",
+          "latency_ms": 33.1,
+          "has_sufficient_evidence": false,
+          "relevant_candidate_count": 4,
+          "citation_count": 0,
+          "expected": "no_answer",
+          "correct": true,
+          "false_positive": false
+        }
+      ],
+      "summary": {
+        "total": 6,
+        "answer_questions": 4,
+        "evidence_hit_rate": 1.0,
+        "answer_hit_rate": 1.0,
+        "missed_rate": 0.0,
+        "no_answer_questions": 2,
+        "no_answer_correct_rate": 1.0,
+        "no_answer_false_positive_rate": 0.0,
+        "latency_ms": {
+          "avg": 41.6,
+          "p95": 48.5,
+          "max": 48.5,
+          "n": 6
+        },
+        "by_category": {
+          "normal": {
+            "n": 4,
+            "answer_n": 4,
+            "answer_correct": 4,
+            "no_answer_n": 0,
+            "no_answer_correct": 0,
+            "false_positive": 0
+          },
+          "型号错配": {
+            "n": 1,
+            "answer_n": 0,
+            "answer_correct": 0,
+            "no_answer_n": 1,
+            "no_answer_correct": 1,
+            "false_positive": 0
+          },
+          "日期归属": {
+            "n": 1,
+            "answer_n": 0,
+            "answer_correct": 0,
+            "no_answer_n": 1,
+            "no_answer_correct": 1,
+            "false_positive": 0
+          }
+        }
+      },
+      "permission_probes": [
+        {
+          "pid": "test_p1_cross_org",
+          "kind": "cross_org",
+          "category": "越权-跨机构",
+          "question": "Y500每台报价多少?",
+          "expected_status": 404,
+          "status": 404,
+          "correct": true,
+          "citations_within_meeting": null
+        },
+        {
+          "pid": "test_p2_same_org_visible",
+          "kind": "same_org_plain_user",
+          "category": "越权-同机构可见(正向对照)",
+          "question": "Y500每台报价多少?",
+          "expected_status": 200,
+          "status": 200,
+          "correct": true,
+          "citations_within_meeting": true
+        }
+      ],
+      "permission_summary": {
+        "n": 2,
+        "correct": 2
+      }
+    }
+  }
+}

@@ -252,7 +252,7 @@ docker exec -i mes-pg psql -U mes -d meeting_evidence_restore -q < demo/db_expor
 |---|---|---|---|---|---|---|
 | mock LLM + mock 检索(**2026-09-23,归属闸之前**) | dev 0.5 / test 0.5 | 各 1 例 | 1.0 | 1.0 | ~60ms | 5/5 |
 | **DeepSeek LLM** + mock 检索(2026-09-23) | dev 1.0 / test 1.0 | 0 例 | dev 0.75 / test 1.0 | dev 0.75 / test 1.0 | 650–830ms | 5/5 |
-| mock LLM + mock 检索(**2026-09-25,归属闸 + D-69 之后**) | **dev 1.0 / test 1.0** | **0 例** | 1.0 | 1.0 | dev 52.1ms / test 39.5ms | dev 3/3、test 2/2 |
+| mock LLM + mock 检索(**2026-09-25,归属闸 + D-69 之后**) | **dev 1.0 / test 1.0** | **0 例** | 1.0 | 1.0 | dev 51.5ms / test 41.6ms | dev 3/3、test 2/2 |
 
 **更正留痕(2026-09-25)**:第一行是**归属闸之前**的基线。重跑冻结集发现 test 的
 `test_neg_model_mismatch` 在归属闸上线后**仍然误报**(0.5)—— 因为 D-65 的闸在"金额/数量"
