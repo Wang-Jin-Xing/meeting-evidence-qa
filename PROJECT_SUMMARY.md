@@ -124,7 +124,9 @@ docker compose -p mes up -d
 MEET_TESTS_USE_REAL_PROVIDERS=1 pytest tests/test_real_embedding.py -q   # 真 Provider 集成
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev_up.ps1    # API + worker
 ```
-3 个 skipped 是真实 Provider 集成测试,默认不跑(避免每次全量测试加载 2.3GB 权重),
-显式设 `MEET_TESTS_USE_REAL_PROVIDERS=1` 时实测 3 passed。
+3 个 skipped 是真实 Provider 集成测试,默认不跑(避免每次全量测试加载 2.3GB 权重)。
+**开关必须限定在该文件上**(即上面那条命令);**加在整套上会关掉 `conftest` 的 Provider 钉桩**,
+整套改用 `.env` 的真实组合与 0.66 阈值,为 mock 口径造的夹具会大面积**假失败**
+(2026-09-25 实测:整套加开关 → 32 failed / 96 passed / 15 errors;限定文件 → 3 passed / 29.0s)。
 演示数据 `demo/seed_demo.py --reset`(库内有非演示数据时会拒绝,需 `--force`)。
 完整启动、账号、接口与坑见 `README.md` 与 `docs/HANDOFF.md`。

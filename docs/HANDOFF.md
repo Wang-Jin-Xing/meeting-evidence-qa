@@ -271,23 +271,50 @@ docker exec -i mes-pg psql -U mes -d meeting_evidence_restore -q < demo/db_expor
 
 ## 10. 接手后的第一次核验(2026-09-25)
 
-**接手规范**:先跑下面三条,确认现状与文档一致再动任何文件;不一致就先把差异报告给用户,不要直接改。
+**接手规范**:先跑下面几条,确认现状与文档一致再动任何文件;不一致就先把差异报告给用户,不要直接改。
 
 | 检查 | 命令 | 2026-09-25 实测 |
 |---|---|---|
 | 推送前闸门 | `python D:\desens\gate_scan.py` | ✅ 两道通过、exit 0(纳入母本真实语料整句 11 条) |
 | 版本现状 | `git -C D:\医疗机构 log --oneline -5` | ✅ 与公开版同源(公开版 HEAD = "同步母本 <母本 HEAD>") |
-| 全量测试 | `pytest -q` | ⛔ **本次未跑成** —— 预期 141 passed / 3 skipped,但需先起 PG 容器;Docker 守护进程被引擎自身停掉,且本机沙箱拦截 `wsl.exe`,起不来 `mes-pg`。**这不是测试失败,是没跑**;Docker 恢复后必须补跑 |
+| 全量测试 | `pytest -q` | ✅ **141 passed / 3 skipped**(150.9s) |
+| 真 Provider 集成 | `MEET_TESTS_USE_REAL_PROVIDERS=1 pytest tests/test_real_embedding.py -q` | ✅ **3 passed**(29.0s);⚠️ 开关**只能限定在该文件上**,见下 |
 
-因此本次核验**只覆盖了闸门与版本现状**,链路与测试类断言(141/3、260+ 行以外的能力主张、
-`eval/run_eval.py`、`demo/seed_demo.py`)当天**全部未复验** —— 不要引用为已验证。
+依赖外部状态:上面两条测试都要先起 `mes-pg`(`docker start mes-pg` → 等 healthy)。
+Docker 起不来时它们跑不了 —— **那是"没跑",不是"失败"**,不要混为一谈。
+
+仍未复验的(需要起服务 / 会写应用库,本轮没做):`eval/run_eval.py` 的基线、
+`demo/seed_demo.py`、以及各能力主张的端到端复跑。不要把它们引用为已验证。
+
+### 更正留痕:`MEET_TESTS_USE_REAL_PROVIDERS` 的写法(原文有歧义,照着做会踩坑)
+
+原文(`README.md` / `docs/EVAL_BASELINE.md` / `PROJECT_SUMMARY.md` / `docs/RESUME.md`)
+写的是「显式设 `MEET_TESTS_USE_REAL_PROVIDERS=1` 时实测 3 passed」——**读起来像是在整套上加开关**。
+实际不是:`tests/conftest.py` 只在**没设**该开关时才把 Provider 钉回 mock;一旦设了,
+**整套测试**都会改用 `.env` 里的真实组合(whisper / deepseek / bge-m3)与 0.66 阈值,
+而那些夹具是按 mock 口径(阈值 0.15)造的 → 大面积**假失败**(conftest 自己的注释就写着
+「轻则假失败(阈值口径不同)」)。
+
+2026-09-25 实测对照:
+
+| 命令 | 结果 |
+|---|---|
+| `pytest -q`(默认) | **141 passed / 3 skipped**(150.9s) |
+| `MEET_TESTS_USE_REAL_PROVIDERS=1 pytest tests/test_real_embedding.py -q` | **3 passed**(29.0s) |
+| `MEET_TESTS_USE_REAL_PROVIDERS=1 pytest -q`(整套) | **32 failed / 96 passed / 1 skipped / 15 errors** ← 假失败,**不是**产品缺陷 |
+
+抽查一例证明是假失败:`tests/test_qa.py::test_query_log_written` 报 `assert row[5] is True`
+(即 `has_sufficient_evidence`);日志里能看到真实权重确实被加载
+(`Loading weights: 100%|391/391`),检索候选也取到了,只是 0.66 阈值把 mock 口径的夹具
+判成"证据不足"。**这个开关是给单文件用的,不是给整套用的。**
+
 
 ### 更正留痕:提交数口径(此前多处写死且互不一致)
 
 此前三处硬编码的提交数**彼此不符、也都与实测不符**,已更正 —— 按纪律单独留痕,
 不悄悄删:
 
-| 出处 | 原写 | 2026-09-25 实测 |
+| 出处 | 原写 | 更正前实测(2026-09-25) |
 |---|---|---|
 | `PROJECT_SUMMARY.md` | 「`git log` 29 次提交」 | 母本 45 / 公开版 43 |
 | 简历母本(仓库之外) | 「仓库 39 次提交」 | 母本 45 / 公开版 43 |

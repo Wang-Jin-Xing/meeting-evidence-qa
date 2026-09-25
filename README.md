@@ -285,8 +285,11 @@ P3 首版(可演示、可复现、可交接):
   基于陈旧版本的编辑返回 409 而非静默覆盖
 
 当前状态补充(测试数量以最近一次运行为准):`pytest -q` → **141 passed / 3 skipped**;
-3 条 skipped 是真实 Provider 集成测试,显式设 `MEET_TESTS_USE_REAL_PROVIDERS=1` 时实测 3 passed
-(默认跳过是为了不让每次全量测试都加载 2.3GB 权重)。
+3 条 skipped 是真实 Provider 集成测试,默认跳过是为了不让每次全量测试都加载 2.3GB 权重。
+**开关必须限定在那个文件上**:`MEET_TESTS_USE_REAL_PROVIDERS=1 pytest tests/test_real_embedding.py -q`
+→ 实测 **3 passed**。**不要加在整套上** —— 那会让 `tests/conftest.py` 不再把 Provider 钉回
+mock,整套改用 `.env` 的真实组合与 0.66 阈值,为 mock 口径造的夹具会大面积**假失败**
+(2026-09-25 实测:整套加开关 → 32 failed / 96 passed / 15 errors)。详见 `docs/HANDOFF.md` §10。
 
 尚未实现 / 不成立:
 - 云端真实 ASR/Embedding 服务商不可用(SiliconFlow 实测 402 余额不足;DeepSeek 无该类接口,
