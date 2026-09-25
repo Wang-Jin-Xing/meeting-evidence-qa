@@ -93,6 +93,16 @@ def model_codes(text: str) -> set[str]:
 
 _CLUE_UNIT = r"(年|个月|天|周|工作日|小时|分钟|人份|度|摄氏度)"
 
+# 型号代号本身带数字("Y300"),直接 `\d` 会被它自己满足 —— 于是"Y300不支持折价回收"
+# 会被判成"含金额线索",归属闸在金额类问题上恒不生效(D-69)。搜数字线索前先抠掉型号。
+_MODEL_CODE_SUB = re.compile(r"[A-Za-z]{1,4}\d{2,4}[A-Za-z]?")
+
+
+def _has_number_clue(text: str) -> bool:
+    """文本里除型号代号之外还有数字(抠掉代号后仍剩数字才算金额/数量线索)。"""
+    norm = text.replace("-", "").replace("_", "").replace(" ", "")
+    return bool(re.search(r"\d", _MODEL_CODE_SUB.sub(" ", norm)))
+
 
 def _clue_asked(question: str):
     """问题在问哪类线索(与 mock 的焦点线索规则同一分类,便于两条路径同口径)。
@@ -106,7 +116,7 @@ def _clue_asked(question: str):
     if any(k in question for k in ("多久", "多长", "几天", "几年", "期限")):
         return lambda t: bool(re.search(rf"\d+\s*{_CLUE_UNIT}", t))
     if any(k in question for k in ("多少", "几盒", "价格", "报价", "单价", "费用", "钱")):
-        return lambda t: bool(re.search(r"\d", t))
+        return _has_number_clue
     return None
 
 

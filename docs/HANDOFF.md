@@ -250,11 +250,20 @@ docker exec -i mes-pg psql -U mes -d meeting_evidence_restore -q < demo/db_expor
 
 | 组合 | 无答案题正确拒答 | 无答案误报 | 证据命中 | 回答命中 | 平均时延 | 权限探针 |
 |---|---|---|---|---|---|---|
-| mock LLM + mock 检索 | dev 0.5 / test 0.5 | 各 1 例 | 1.0 | 1.0 | ~60ms | 5/5 |
-| **DeepSeek LLM** + mock 检索 | dev 1.0 / test 1.0 | 0 例 | dev 0.75 / test 1.0 | dev 0.75 / test 1.0 | 650–830ms | 5/5 |
+| mock LLM + mock 检索(**2026-09-23,归属闸之前**) | dev 0.5 / test 0.5 | 各 1 例 | 1.0 | 1.0 | ~60ms | 5/5 |
+| **DeepSeek LLM** + mock 检索(2026-09-23) | dev 1.0 / test 1.0 | 0 例 | dev 0.75 / test 1.0 | dev 0.75 / test 1.0 | 650–830ms | 5/5 |
+| mock LLM + mock 检索(**2026-09-25,归属闸 + D-69 之后**) | **dev 1.0 / test 1.0** | **0 例** | 1.0 | 1.0 | dev 52.1ms / test 39.5ms | dev 3/3、test 2/2 |
 
-能说的:真实 LLM 消除了 mock 的两例型号错配/日期归属误报(见 `dev_neg_model_mismatch`
-由 false_positive=1 → 0),代价是时延上升一个量级。
+**更正留痕(2026-09-25)**:第一行是**归属闸之前**的基线。重跑冻结集发现 test 的
+`test_neg_model_mismatch` 在归属闸上线后**仍然误报**(0.5)—— 因为 D-65 的闸在"金额/数量"
+类问题上是空转的:问题点名的型号代号**自带数字**,"Y300" 就满足了金额类线索的 `\d` 判据
+(见 D-69)。修复后 dev/test 误报都归零、可答题命中率不变。改前/改后报告留档在
+`eval/reports_sample/mock_baseline_devtest_before_d69_20260925.json` /
+`..._after_d69.json`。
+
+能说的:换真实 LLM 后 dev/test 的型号错配/日期归属误报都归零,代价是时延上升一个量级;
+但**这两例后来在 mock 路径下也各自被归属闸消掉了**(dev 那例 D-65、test 那例 D-69) ——
+原文"真实 LLM 消除了 mock 的两例误报"只是当时的表述,不要读成"只有真实 LLM 能消"。
 **不能说的**:检索质量结论——Embedding 仍是 mock bigram,`evidence_hit` 只反映
 字面重叠检索是否把金标片段捞上来。
 
@@ -283,8 +292,19 @@ docker exec -i mes-pg psql -U mes -d meeting_evidence_restore -q < demo/db_expor
 依赖外部状态:上面两条测试都要先起 `mes-pg`(`docker start mes-pg` → 等 healthy)。
 Docker 起不来时它们跑不了 —— **那是"没跑",不是"失败"**,不要混为一谈。
 
-仍未复验的(需要起服务 / 会写应用库,本轮没做):`eval/run_eval.py` 的基线、
-`demo/seed_demo.py`、以及各能力主张的端到端复跑。不要把它们引用为已验证。
+**2026-09-25 补跑(Docker 起来之后)**:
+
+- 全量测试:`pytest -q` → **141 passed / 3 skipped**(150.9s;改动后再跑 130.9s,无回归)
+- 评测基线:`ASR_PROVIDER=mock LLM_PROVIDER=mock EMBED_PROVIDER=mock
+  QA_EVIDENCE_THRESHOLD=0.15 python eval/run_eval.py` → 冻结 dev/test 各 6 题 + 权限探针
+  全绿(数字见 §9 更正留痕)。**注意:裸跑 `python eval/run_eval.py` 会直接退出码 1** ——
+  脚本断言 `ASR_PROVIDER=mock`(语料靠 mock ASR 注入),`.env` 配成真 whisper 时必须先覆盖。
+- 顺带查出并修掉一个真缺陷(**D-69**):型号归属闸在"金额/数量"类问题上是**空转**的 ——
+  问题点名的型号代号自带数字("Y300" 就满足 `\d`),于是闸恒不触发;冻结 test 的
+  `test_neg_model_mismatch`(「Y300的报价是多少?」)误报 0.5 就是它。修后误报 **1 → 0**、
+  可答题命中率不变(无误伤)。
+
+仍未复验的:`demo/seed_demo.py`、各能力主张的端到端复跑(需起服务写应用库)。
 
 ### 更正留痕:`MEET_TESTS_USE_REAL_PROVIDERS` 的写法(原文有歧义,照着做会踩坑)
 
