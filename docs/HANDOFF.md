@@ -124,7 +124,7 @@ $env:LLM_PROVIDER="deepseek"; .\.venv\Scripts\python.exe demo/seed_demo.py --res
 
 | 环节 | 现状 | 备注 |
 |---|---|---|
-| LLM | **真实** DeepSeek `deepseek-chat`(密钥来自环境变量 `DEEPSEEK_API_KEY`) | 已可用;tokens 为服务商口径,金额未配单价表 → `unknown` |
+| LLM | **真实** DeepSeek `deepseek-chat`(密钥来自环境变量 `DEEPSEEK_API_KEY`) | 2026-09-25 实测仍有成功调用(14:27Z,2 次);tokens 为服务商口径,金额未配单价表 → `unknown`。**注意**:该别名官方公告 2026-07-24 停用,且已不在当前官方价目表内,见 **D-71** |
 | Embedding | **真实** 本地 `BAAI/bge-m3`(`EMBED_PROVIDER=bge-m3`) | 权重经 hf-mirror 下载;实测 1024 维 = 向量列;换模型必须重校准阈值(D-48) |
 | ASR | **真实** 本地 faster-whisper small/int8(`ASR_PROVIDER=whisper`) | 已在一段真实录音(立体声/24-bit/48k/28.86s)上端到端验证;识别错误原样保留(D-55);静音占位演示会谈仍标注为占位 |
 
@@ -189,6 +189,12 @@ top1 均命中证据句(相似度 0.71~0.82,无答案探针最高 0.55)——
   恢复顺序:`docker start mes-pg` → 等 healthy → `scripts/dev_up.ps1`。
 - **`<audio>` 发不出 Authorization 头**:别为此把 JWT 塞进 URL(会进浏览器历史与
   访问日志);界面用带鉴权的 fetch 取 blob 播放。
+- **供应商模型别名会"过了停用日期还继续服务",且已从官方价目表里消失**(D-71):
+  本项目调 `deepseek-chat`,官方 2026-04-24 公告其 **2026-07-24 停用**,但
+  2026-09-25 实测仍能成功调用;而当前官方价格页只列 `deepseek-flash` /
+  `deepseek-v4-pro`,**没有 `deepseek-chat`**。后果:单价表**填不了** ——
+  填任何数字都是猜(违反纪律 1),`cost_basis` 只能停在 `unknown`。
+  别因为"今天还能用"就以为它稳定,也别为了把 `unknown` 变好看而编个价。
 - **前端轮询不能对"已结束"的任务再起轮询**(D-70):`pollJob()` 会立即执行一次 `tick()`,
   而 `tick()` 在终态分支里又调 `renderRecordings()`,后者又对**所有**录音调 `pollJob()` ——
   于是无界自我刷新,表现为详情页持续跳动(实测 300ms 500+ 次请求)。

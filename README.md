@@ -5,6 +5,11 @@
 真实模型(faster-whisper / DeepSeek / bge-m3,本机本地推理 + 真实外部调用)与一条真实会议录音
 都已跑通,并留下可复现工件。用于求职展示。
 
+**三类模型都在产品路径上,不是只有一类**:本地 ASR(faster-whisper)+ 本地 Embedding
+(bge-m3)+ 远程 LLM(DeepSeek),`model_run` 表截至 2026-09-25 累计 **368 次真实调用**
+(逐项拆解与自数命令见下文「当前真实模型组合」;该数字**会随调用增长**,以命令实数为准)。
+测试与评测**默认走 mock** 是为了不花钱、可复现,别把它误读成"项目没接模型"。
+
 ## 文档地图
 
 | 想知道 | 看哪里 |
@@ -118,13 +123,30 @@ Remove-Item Env:ASR_PROVIDER,Env:LLM_PROVIDER,Env:EMBED_PROVIDER,Env:QA_EVIDENCE
 | `demo_admin_c` / `demo_staff_c` | 演示-康泰儿童医院 | 边界案例(无明确日期 + 型号混淆,`restricted`) |
 | `demo_outsider` | 演示-外部医疗机构 | 越权演示:详情与提问均 404 |
 
-### 当前真实模型组合(如实说明,2026-09-23)
+### 当前真实模型组合(2026-09-25 实测,三个环节都是真模型)
 
-| 环节 | 生效实现 | 说明 |
-|---|---|---|
-| LLM(纪要 + 问答) | **真实** DeepSeek `deepseek-chat` | 返回 tokens 为服务商口径;金额未配单价表 → 成本记 `unknown` |
-| Embedding(检索) | **mock**(字符 bigram) | SiliconFlow `BAAI/bge-m3` 返回 402 账户余额不足,真实检索未接入 |
-| ASR(转写) | **mock** + 人工转写导入 | SiliconFlow `SenseVoiceSmall` 同样 402;演示以人工转写为权威文本来源 |
+| 环节 | 生效实现 | 位置 | 实测调用 |
+|---|---|---|---|
+| ASR(转写) | faster-whisper small/int8 | **本机本地推理** | 55 次 |
+| Embedding(检索) | BAAI/bge-m3,1024 维 | **本机本地推理** | 182 次(问答 156 + 建索引 26) |
+| LLM(纪要 + 问答) | DeepSeek `deepseek-chat` | 远程 API | 131 次(问答 105 + 纪要 26) |
+
+"实测调用"是 `model_run` 表里 `is_mock=false` 的记录条数,自数一次即可:
+
+```bash
+docker exec mes-pg psql -U mes -d meeting_evidence -c \
+  "select provider, model_name, stage, count(*) from model_run \
+   where is_mock=false group by 1,2,3 order by 4 desc;"
+```
+
+**关于 mock**:`pytest -q` 与 `eval/run_eval.py` **默认走 mock**
+(跑测试与评测不花钱、可复现),所以仓库里 mock 的出现频率远高于真模型 ——
+mock 是**测试/评测的默认**,不是产品路径的默认。运行中的服务读仓库根 `.env`,
+`/meta` 会回显实际生效的 Provider。
+
+两点如实保留:① LLM 未配单价表 → `cost_basis=unknown`(金额 NULL,**不按 0 记账**);
+② `deepseek-chat` 是官方公告 2026-07-24 停用的**旧别名**,当前仍可成功调用,
+但已不在官方价目表内(见 `docs/DECISIONS.md` D-71)。
 
 ### 真实录音端到端(本地 ASR + 本地 Embedding + DeepSeek)
 
