@@ -158,10 +158,18 @@ function renderRecordings(recs) {
         ${r.job_current_stage ? "· 当前阶段 " + esc(r.job_current_stage) : ""}</div>
       <div id="stages-${r.job_id}"></div>
     </div>`).join("");
-  recs.forEach((r) => r.job_id && pollJob(r.job_id));
+  // 只对**未结束**的任务起轮询。
+  // 已结束的任务其状态与阶段结果都已经在 recs 里;若照旧无条件下 pollJob,
+  // 它会立即执行一次 tick() 并命中下面的"已结束"分支 → 又调 renderRecordings()
+  // → 又 pollJob() → 无界自我刷新:详情页不断重建录音区与纪要区 DOM,
+  // 表现为页面持续跳动(实测 300ms 内 500+ 次请求)。
+  recs.forEach((r) => r.job_id && !TERMINAL_JOB.has(r.job_status) && pollJob(r.job_id));
 }
 
 const STAGES = ["prepare", "transcribe", "minutes", "index"];
+
+/* 任务终态。轮询的"停"与"是否重新起轮询"共用这一份判据,避免两处口径漂移。 */
+const TERMINAL_JOB = new Set(["succeeded", "failed"]);
 
 const SOURCE_LABEL = {
   asr: "自动转写", human_transcription: "人工转写导入(非识别输出)",
@@ -200,10 +208,11 @@ function pollJob(jobId) {
       }).join("") + (job.last_error
         ? `<div class="err">错误:${esc(job.last_error)}</div>` : "");
     }
-    if (job.status === "succeeded" || job.status === "failed") {
+    if (TERMINAL_JOB.has(job.status)) {
       clearInterval(state.pollers[jobId]);
       delete state.pollers[jobId];
-      // 重新拉详情:转写来源/版本等派生字段只有这里能刷新
+      // 重新拉详情:转写来源/版本等派生字段只有这里能刷新。
+      // 刷新后 renderRecordings 会用服务端返回的 job_status 判定已结束,不再重新起轮询。
       if (job.status === "succeeded" && state.meetingId) {
         const m = await api(`/meetings/${state.meetingId}`);
         renderRecordings(m.recordings || []);
