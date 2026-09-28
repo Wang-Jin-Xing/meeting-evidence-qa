@@ -1,0 +1,767 @@
+{
+  "disclosure": "A/B 双链路对比的脱敏摘要:转录文本、答案文本与音频绝对路径已移除,只保留可复核的数值(相似度、是否过阈、命中切片、耗时、用量与费用)。真实录音与其转写未公开,原因与影响见 docs/PUBLICATION.md。",
+  "withheld_artifacts": [
+    "demo/corpus/会议录音.asr.json",
+    "demo/corpus/会议录音.corrected.json",
+    "demo/corpus/会议录音.待确认.md",
+    "demo/corpus/会议录音.校对说明.md",
+    "demo/verification/real_audio_会议录音.json",
+    "会议录音.wav(原件,从未提交)"
+  ],
+  "meta": {
+    "timestamp": "2026-09-23T05:46:04.673039+00:00",
+    "audio": {
+      "path": "〔已脱敏:真实语料文本未公开〕",
+      "size_bytes": 8311724,
+      "channels": 2,
+      "sample_width_bits": 24,
+      "sample_rate": 48000,
+      "duration_seconds": 28.86,
+      "comptype": "NONE",
+      "sha256_16": "207e189720932974",
+      "slices_at_10s": 3
+    },
+    "providers": {
+      "asr": {
+        "name": "local-whisper",
+        "model": "faster-whisper:small@int8",
+        "is_mock": false
+      },
+      "llm": {
+        "name": "deepseek",
+        "model": "deepseek-chat",
+        "is_mock": false,
+        "prompt_version": "deepseek-meetings-v1"
+      },
+      "embed": {
+        "name": "local-bge-m3",
+        "model": "BAAI/bge-m3(local)",
+        "is_mock": false,
+        "dim": 1024
+      },
+      "all_mock": false
+    },
+    "slice_seconds": 10,
+    "timestamp_note": "切片范围,非精确语句定位(P1=A)",
+    "timeout_budget_seconds": 300.0,
+    "meeting_a": 7
+  },
+  "audio_meta": {
+    "size_bytes": 8311724,
+    "channels": 2,
+    "sample_width_bits": 24,
+    "sample_rate": 48000,
+    "duration_seconds": 28.86,
+    "comptype": "NONE",
+    "sha256_16": "207e189720932974",
+    "slices_at_10s": 3
+  },
+  "correction": {
+    "version_id": 11,
+    "meeting_id": 8,
+    "org_id": 4,
+    "segments": 3,
+    "edited": 3,
+    "unchanged": 0,
+    "source_note": "〔已脱敏:真实语料文本未公开〕"
+  },
+  "chain_a_wall_seconds": 39.3,
+  "chain_b_wall_seconds": 10.0,
+  "chain_asr": [
+    {
+      "question": "X200的资料由谁负责?",
+      "latency_ms": 1531.7,
+      "has_sufficient_evidence": true,
+      "raw_retrieved": 3,
+      "candidates": 1,
+      "answer": "〔已脱敏:真实语料文本未公开〕",
+      "citations": [
+        {
+          "segment_id": 61,
+          "similarity": 0.685456,
+          "start_ms": 0,
+          "end_ms": 10000,
+          "timestamp_precision": "segment_level_from_slice",
+          "text": "〔已脱敏:真实语料文本未公开〕"
+        }
+      ]
+    },
+    {
+      "question": "Y500的价格是多少?",
+      "latency_ms": 1980.0,
+      "has_sufficient_evidence": true,
+      "raw_retrieved": 3,
+      "candidates": 1,
+      "answer": "〔已脱敏:真实语料文本未公开〕",
+      "citations": [
+        {
+          "segment_id": 62,
+          "similarity": 0.746679,
+          "start_ms": 10000,
+          "end_ms": 20000,
+          "timestamp_precision": "segment_level_from_slice",
+          "text": "〔已脱敏:真实语料文本未公开〕"
+        }
+      ]
+    },
+    {
+      "question": "Y300现在有没有报价?",
+      "latency_ms": 2463.4,
+      "has_sufficient_evidence": true,
+      "raw_retrieved": 3,
+      "candidates": 1,
+      "answer": "〔已脱敏:真实语料文本未公开〕",
+      "citations": [
+        {
+          "segment_id": 63,
+          "similarity": 0.744905,
+          "start_ms": 20000,
+          "end_ms": 28860,
+          "timestamp_precision": "segment_level_from_slice",
+          "text": "〔已脱敏:真实语料文本未公开〕"
+        }
+      ]
+    },
+    {
+      "question": "什么时间之前要补齐?",
+      "latency_ms": 212.9,
+      "has_sufficient_evidence": false,
+      "raw_retrieved": 3,
+      "candidates": 0,
+      "answer": "〔已脱敏:真实语料文本未公开〕",
+      "citations": []
+    },
+    {
+      "question": "保修时间确定了吗?",
+      "latency_ms": 209.9,
+      "has_sufficient_evidence": false,
+      "raw_retrieved": 3,
+      "candidates": 0,
+      "answer": "〔已脱敏:真实语料文本未公开〕",
+      "citations": []
+    }
+  ],
+  "chain_corrected": [
+    {
+      "question": "X200的资料由谁负责?",
+      "latency_ms": 1082.9,
+      "has_sufficient_evidence": true,
+      "raw_retrieved": 3,
+      "candidates": 1,
+      "answer": "〔已脱敏:真实语料文本未公开〕",
+      "citations": [
+        {
+          "segment_id": 67,
+          "similarity": 0.716877,
+          "start_ms": 0,
+          "end_ms": 10000,
+          "timestamp_precision": "segment_level_from_slice",
+          "text": "〔已脱敏:真实语料文本未公开〕"
+        }
+      ]
+    },
+    {
+      "question": "Y500的价格是多少?",
+      "latency_ms": 1327.5,
+      "has_sufficient_evidence": true,
+      "raw_retrieved": 3,
+      "candidates": 1,
+      "answer": "〔已脱敏:真实语料文本未公开〕",
+      "citations": [
+        {
+          "segment_id": 68,
+          "similarity": 0.776768,
+          "start_ms": 10000,
+          "end_ms": 20000,
+          "timestamp_precision": "segment_level_from_slice",
+          "text": "〔已脱敏:真实语料文本未公开〕"
+        }
+      ]
+    },
+    {
+      "question": "Y300现在有没有报价?",
+      "latency_ms": 1130.0,
+      "has_sufficient_evidence": true,
+      "raw_retrieved": 3,
+      "candidates": 2,
+      "answer": "〔已脱敏:真实语料文本未公开〕",
+      "citations": [
+        {
+          "segment_id": 69,
+          "similarity": 0.799801,
+          "start_ms": 20000,
+          "end_ms": 28860,
+          "timestamp_precision": "segment_level_from_slice",
+          "text": "〔已脱敏:真实语料文本未公开〕"
+        }
+      ]
+    },
+    {
+      "question": "什么时间之前要补齐?",
+      "latency_ms": 169.0,
+      "has_sufficient_evidence": false,
+      "raw_retrieved": 3,
+      "candidates": 0,
+      "answer": "〔已脱敏:真实语料文本未公开〕",
+      "citations": []
+    },
+    {
+      "question": "保修时间确定了吗?",
+      "latency_ms": 189.8,
+      "has_sufficient_evidence": false,
+      "raw_retrieved": 3,
+      "candidates": 0,
+      "answer": "〔已脱敏:真实语料文本未公开〕",
+      "citations": []
+    }
+  ],
+  "ledger_a": [
+    {
+      "stage": "index",
+      "provider": "local-bge-m3",
+      "model": "BAAI/bge-m3(local)",
+      "is_mock": false,
+      "status": "succeeded",
+      "cost_basis": "estimated",
+      "cost_cents": 0.0,
+      "device": "local:cpu",
+      "prompt_version": null,
+      "calls": 1,
+      "avg_ms": 25452.0,
+      "max_ms": 25452
+    },
+    {
+      "stage": "minutes",
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "is_mock": false,
+      "status": "succeeded",
+      "cost_basis": "unknown",
+      "cost_cents": null,
+      "device": "remote:deepseek",
+      "prompt_version": "deepseek-meetings-v1",
+      "calls": 1,
+      "avg_ms": 1671.0,
+      "max_ms": 1671
+    },
+    {
+      "stage": "qa",
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "is_mock": false,
+      "status": "succeeded",
+      "cost_basis": "unknown",
+      "cost_cents": null,
+      "device": "remote:deepseek",
+      "prompt_version": "deepseek-meetings-v1",
+      "calls": 9,
+      "avg_ms": 957.0,
+      "max_ms": 1125
+    },
+    {
+      "stage": "qa",
+      "provider": "local-bge-m3",
+      "model": "BAAI/bge-m3(local)",
+      "is_mock": false,
+      "status": "succeeded",
+      "cost_basis": "estimated",
+      "cost_cents": 0.0,
+      "device": "local:cpu",
+      "prompt_version": null,
+      "calls": 18,
+      "avg_ms": 5486.0,
+      "max_ms": 34922
+    },
+    {
+      "stage": "transcribe",
+      "provider": "local-whisper",
+      "model": "faster-whisper:small@int8",
+      "is_mock": false,
+      "status": "succeeded",
+      "cost_basis": "estimated",
+      "cost_cents": 0.0,
+      "device": "local:cpu:int8",
+      "prompt_version": "zh-medproc-v1",
+      "calls": 3,
+      "avg_ms": 3844.0,
+      "max_ms": 6688
+    }
+  ],
+  "ledger_b": [
+    {
+      "stage": "index",
+      "provider": "local-bge-m3",
+      "model": "BAAI/bge-m3(local)",
+      "is_mock": false,
+      "status": "succeeded",
+      "cost_basis": "estimated",
+      "cost_cents": 0.0,
+      "device": "local:cpu",
+      "prompt_version": null,
+      "calls": 2,
+      "avg_ms": 188.0,
+      "max_ms": 188
+    },
+    {
+      "stage": "minutes",
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "is_mock": false,
+      "status": "succeeded",
+      "cost_basis": "unknown",
+      "cost_cents": null,
+      "device": "remote:deepseek",
+      "prompt_version": "deepseek-meetings-v1",
+      "calls": 2,
+      "avg_ms": 1515.0,
+      "max_ms": 1718
+    },
+    {
+      "stage": "qa",
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "is_mock": false,
+      "status": "succeeded",
+      "cost_basis": "unknown",
+      "cost_cents": null,
+      "device": "remote:deepseek",
+      "prompt_version": "deepseek-meetings-v1",
+      "calls": 12,
+      "avg_ms": 962.0,
+      "max_ms": 1125
+    },
+    {
+      "stage": "qa",
+      "provider": "local-bge-m3",
+      "model": "BAAI/bge-m3(local)",
+      "is_mock": false,
+      "status": "succeeded",
+      "cost_basis": "estimated",
+      "cost_cents": 0.0,
+      "device": "local:cpu",
+      "prompt_version": null,
+      "calls": 23,
+      "avg_ms": 4314.0,
+      "max_ms": 34922
+    },
+    {
+      "stage": "transcribe",
+      "provider": "local-whisper",
+      "model": "faster-whisper:small@int8",
+      "is_mock": false,
+      "status": "succeeded",
+      "cost_basis": "estimated",
+      "cost_cents": 0.0,
+      "device": "local:cpu:int8",
+      "prompt_version": "zh-medproc-v1",
+      "calls": 3,
+      "avg_ms": 2515.0,
+      "max_ms": 2672
+    }
+  ],
+  "comparison": {
+    "per_slice": [
+      {
+        "seq": 1,
+        "asr_text": "〔已脱敏:真实语料文本未公开〕",
+        "corrected_text": "〔已脱敏:真实语料文本未公开〕",
+        "char_equal": false,
+        "entity_diffs": "〔已脱敏:真实语料文本未公开〕"
+      },
+      {
+        "seq": 2,
+        "asr_text": "〔已脱敏:真实语料文本未公开〕",
+        "corrected_text": "〔已脱敏:真实语料文本未公开〕",
+        "char_equal": false,
+        "entity_diffs": "〔已脱敏:真实语料文本未公开〕"
+      },
+      {
+        "seq": 3,
+        "asr_text": "〔已脱敏:真实语料文本未公开〕",
+        "corrected_text": "〔已脱敏:真实语料文本未公开〕",
+        "char_equal": false,
+        "entity_diffs": "〔已脱敏:真实语料文本未公开〕"
+      }
+    ],
+    "per_question": [
+      {
+        "question": "X200的资料由谁负责?",
+        "asr_answer": "〔已脱敏:真实语料文本未公开〕",
+        "corrected_answer": "〔已脱敏:真实语料文本未公开〕",
+        "asr_sufficient": true,
+        "corrected_sufficient": true,
+        "citations_asr": [
+          61
+        ],
+        "citations_corrected": [
+          67
+        ],
+        "slices_with_entity_diffs": [
+          1,
+          2
+        ],
+        "attribution": "疑似语音识别错误影响(转写差异改变了回答内容)"
+      },
+      {
+        "question": "Y500的价格是多少?",
+        "asr_answer": "〔已脱敏:真实语料文本未公开〕",
+        "corrected_answer": "〔已脱敏:真实语料文本未公开〕",
+        "asr_sufficient": true,
+        "corrected_sufficient": true,
+        "citations_asr": [
+          62
+        ],
+        "citations_corrected": [
+          68
+        ],
+        "slices_with_entity_diffs": [
+          1,
+          2
+        ],
+        "attribution": "两链路结果一致(识别差异未改变本次回答)"
+      },
+      {
+        "question": "Y300现在有没有报价?",
+        "asr_answer": "〔已脱敏:真实语料文本未公开〕",
+        "corrected_answer": "〔已脱敏:真实语料文本未公开〕",
+        "asr_sufficient": true,
+        "corrected_sufficient": true,
+        "citations_asr": [
+          63
+        ],
+        "citations_corrected": [
+          69
+        ],
+        "slices_with_entity_diffs": [
+          1,
+          2
+        ],
+        "attribution": "疑似语音识别错误影响(转写差异改变了回答内容)"
+      },
+      {
+        "question": "什么时间之前要补齐?",
+        "asr_answer": "〔已脱敏:真实语料文本未公开〕",
+        "corrected_answer": "〔已脱敏:真实语料文本未公开〕",
+        "asr_sufficient": false,
+        "corrected_sufficient": false,
+        "citations_asr": [],
+        "citations_corrected": [],
+        "slices_with_entity_diffs": [
+          1,
+          2
+        ],
+        "attribution": "两链路结果一致(识别差异未改变本次回答)"
+      },
+      {
+        "question": "保修时间确定了吗?",
+        "asr_answer": "〔已脱敏:真实语料文本未公开〕",
+        "corrected_answer": "〔已脱敏:真实语料文本未公开〕",
+        "asr_sufficient": false,
+        "corrected_sufficient": false,
+        "citations_asr": [],
+        "citations_corrected": [],
+        "slices_with_entity_diffs": [
+          1,
+          2
+        ],
+        "attribution": "两链路结果一致(识别差异未改变本次回答)"
+      }
+    ],
+    "note": "〔已脱敏:真实语料文本未公开〕",
+    "similarity_before_threshold": {
+      "method": "真实 bge-m3 embed_batch → qa_service.retrieve_candidates(与生产问答同一入口,含 org 权限与 active_search_version 指针),**不施加阈值**,故可见被滤掉的相似度",
+      "threshold": 0.66,
+      "top_k": 5,
+      "meeting_a": 7,
+      "meeting_b": 8,
+      "per_question": [
+        {
+          "question": "X200的资料由谁负责?",
+          "chains": {
+            "A_原始ASR": {
+              "meeting_id": 7,
+              "best_similarity": 0.6855,
+              "candidates_over_threshold": 1,
+              "hits": [
+                {
+                  "similarity": 0.6855,
+                  "segment_id": 61,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": true
+                },
+                {
+                  "similarity": 0.4704,
+                  "segment_id": 63,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                },
+                {
+                  "similarity": 0.3423,
+                  "segment_id": 62,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                }
+              ]
+            },
+            "B_人工校对": {
+              "meeting_id": 8,
+              "best_similarity": 0.7169,
+              "candidates_over_threshold": 1,
+              "hits": [
+                {
+                  "similarity": 0.7169,
+                  "segment_id": 67,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": true
+                },
+                {
+                  "similarity": 0.4172,
+                  "segment_id": 68,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                },
+                {
+                  "similarity": 0.4093,
+                  "segment_id": 69,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                }
+              ]
+            }
+          },
+          "delta": 0.0314,
+          "rank1_is_same_segment": false
+        },
+        {
+          "question": "Y500的价格是多少?",
+          "chains": {
+            "A_原始ASR": {
+              "meeting_id": 7,
+              "best_similarity": 0.7467,
+              "candidates_over_threshold": 1,
+              "hits": [
+                {
+                  "similarity": 0.7467,
+                  "segment_id": 62,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": true
+                },
+                {
+                  "similarity": 0.5658,
+                  "segment_id": 61,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                },
+                {
+                  "similarity": 0.5403,
+                  "segment_id": 63,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                }
+              ]
+            },
+            "B_人工校对": {
+              "meeting_id": 8,
+              "best_similarity": 0.7768,
+              "candidates_over_threshold": 1,
+              "hits": [
+                {
+                  "similarity": 0.7768,
+                  "segment_id": 68,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": true
+                },
+                {
+                  "similarity": 0.6215,
+                  "segment_id": 69,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                },
+                {
+                  "similarity": 0.5624,
+                  "segment_id": 67,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                }
+              ]
+            }
+          },
+          "delta": 0.0301,
+          "rank1_is_same_segment": false
+        },
+        {
+          "question": "Y300现在有没有报价?",
+          "chains": {
+            "A_原始ASR": {
+              "meeting_id": 7,
+              "best_similarity": 0.7449,
+              "candidates_over_threshold": 1,
+              "hits": [
+                {
+                  "similarity": 0.7449,
+                  "segment_id": 63,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": true
+                },
+                {
+                  "similarity": 0.6544,
+                  "segment_id": 62,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                },
+                {
+                  "similarity": 0.6226,
+                  "segment_id": 61,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                }
+              ]
+            },
+            "B_人工校对": {
+              "meeting_id": 8,
+              "best_similarity": 0.7998,
+              "candidates_over_threshold": 2,
+              "hits": [
+                {
+                  "similarity": 0.7998,
+                  "segment_id": 69,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": true
+                },
+                {
+                  "similarity": 0.7618,
+                  "segment_id": 68,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": true
+                },
+                {
+                  "similarity": 0.622,
+                  "segment_id": 67,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                }
+              ]
+            }
+          },
+          "delta": 0.0549,
+          "rank1_is_same_segment": false
+        },
+        {
+          "question": "什么时间之前要补齐?",
+          "chains": {
+            "A_原始ASR": {
+              "meeting_id": 7,
+              "best_similarity": 0.4805,
+              "candidates_over_threshold": 0,
+              "hits": [
+                {
+                  "similarity": 0.4805,
+                  "segment_id": 62,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                },
+                {
+                  "similarity": 0.4685,
+                  "segment_id": 63,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                },
+                {
+                  "similarity": 0.395,
+                  "segment_id": 61,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                }
+              ]
+            },
+            "B_人工校对": {
+              "meeting_id": 8,
+              "best_similarity": 0.5681,
+              "candidates_over_threshold": 0,
+              "hits": [
+                {
+                  "similarity": 0.5681,
+                  "segment_id": 68,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                },
+                {
+                  "similarity": 0.4981,
+                  "segment_id": 69,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                },
+                {
+                  "similarity": 0.3968,
+                  "segment_id": 67,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                }
+              ]
+            }
+          },
+          "delta": 0.0876,
+          "rank1_is_same_segment": false
+        },
+        {
+          "question": "保修时间确定了吗?",
+          "chains": {
+            "A_原始ASR": {
+              "meeting_id": 7,
+              "best_similarity": 0.5292,
+              "candidates_over_threshold": 0,
+              "hits": [
+                {
+                  "similarity": 0.5292,
+                  "segment_id": 63,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                },
+                {
+                  "similarity": 0.4594,
+                  "segment_id": 61,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                },
+                {
+                  "similarity": 0.4502,
+                  "segment_id": 62,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                }
+              ]
+            },
+            "B_人工校对": {
+              "meeting_id": 8,
+              "best_similarity": 0.6566,
+              "candidates_over_threshold": 0,
+              "hits": [
+                {
+                  "similarity": 0.6566,
+                  "segment_id": 69,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                },
+                {
+                  "similarity": 0.52,
+                  "segment_id": 68,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                },
+                {
+                  "similarity": 0.4656,
+                  "segment_id": 67,
+                  "text": "〔已脱敏:真实语料文本未公开〕",
+                  "passes_threshold": false
+                }
+              ]
+            }
+          },
+          "delta": 0.1274,
+          "rank1_is_same_segment": false
+        }
+      ],
+      "reading": "delta>0 表示校对确实抬升了该题最高相似度;两题仍判证据不足的直接原因是最高相似度仍低于阈值,而不是排序错或检索没取到(阈值前每轮都取到全部 3 片)。"
+    }
+  }
+}
