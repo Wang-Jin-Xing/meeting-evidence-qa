@@ -26,7 +26,8 @@
 
 - 样本:**1 条真实会议录音**,28.86s,3 个 10s 切片,立体声 24-bit/48kHz
 - 模型:faster-whisper `small/int8`,词表 `zh-medproc-v1`,切片 3 次重跑
-- 已观测到的识别错误(4 处,**经人工听判确认**,`demo/corpus/会议录音.校对说明.md`):
+- 已观测到的识别错误(4 处,**经人工听判确认**;逐处依据稿随真实语料一起未公开,
+  见 `docs/PUBLICATION.md`;本文件保留的只是错字对照,不含会议业务事实):
   `张公傅责→张工负责`、`布齐→补齐资料`、`没有报告→没有报价`、`北迅时间→保修时间`;
   另有 1 处数字错(`5月26日→5月20日`)与 1 处语义错(`不适用于外国人→不适用于Y300`)
 - 稳定性:同音频三次转写有 1 处标点抖动 → **A/B 对比的基线固定为同一次运行的输出**
@@ -35,7 +36,8 @@
 
 ## 3. 检索质量(同样本,阈值前相似度可复算)
 
-数据:`demo/verification/real_audio_会议录音.json` → `comparison.similarity_before_threshold`
+数据:`demo/verification/real_audio_AB_summary.json` → `comparison.similarity_before_threshold`
+(脱敏摘要:文本字段已占位,相似度与 Δ 一位未改)
 (真实 bge-m3 + 生产同一路径 `retrieve_candidates`,含权限与指针条件,**不施加阈值**)。
 
 | 问题 | A(原始 ASR) | B(人工校对) | Δ | 0.66 下 |

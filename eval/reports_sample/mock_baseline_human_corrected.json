@@ -18,7 +18,7 @@
     },
     "database": "meeting_evidence_test",
     "dataset": {
-      "path": "D:\\医疗机构\\eval\\dataset.json",
+      "path": "〔母本路径〕\\eval\\dataset.json",
       "version": "eval-v2",
       "sha256": "ed140300bbe7f6a1",
       "split_by": "meeting"

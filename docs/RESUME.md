@@ -37,7 +37,7 @@
 | 不覆盖原始输出 | 网页上把 `张公傅责` 改成 `张工负责` 另存新版 → 历史列表 `v1 ai_draft confirmed` 与 `v2 human_edit pending_review` 并排 |
 | worker 可恢复 | `docker exec` 查 `processing_job.locked_by / lease_epoch`,或跑 `tests/test_recovery.py` |
 | 测试是真的 | `pytest -q` → 141 passed / 3 skipped;3 条真 Provider 集成测试**限定该文件**加开关后 3 passed |
-| 数字不是编的 | `demo/verification/real_audio_会议录音.json` 里 `similarity_before_threshold` 有逐题 A/B 相似度与 Δ;评测报告含 git 脏标记与数据集 sha256 |
+| 数字不是编的 | `demo/verification/real_audio_AB_summary.json` 里 `similarity_before_threshold` 有逐题 A/B 相似度与 Δ(真实语料文本已占位,数值未改);评测报告含 git 脏标记与数据集 sha256 |
 | 知道失败在哪 | `docs/DECISIONS.md` D-59(改判为阈值)、D-55(识别错误原样保留)、`PROJECT_SUMMARY.md` §4 失败清单 |
 
 ## 刻意不写的东西

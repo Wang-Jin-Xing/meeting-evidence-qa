@@ -2,8 +2,13 @@
 
 前置:`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev_up.ps1`
 (API + 独立 worker 起好,横幅与 `/meta` 都显示真实模型、阈值 0.66)。
-浏览器准备两个账号:`demo_real_admin`(真实录音,密码见 `demo/seed_demo.py` 默认值)、
-`demo_staff_c`(另一机构,用于越权对照)。
+浏览器准备两个账号:`demo_real_admin`(真实录音,由 `demo/ingest_real_recording.py` 建,
+密码见 `demo/seed_demo.py` 默认值)、`demo_staff_c`(另一机构,用于越权对照)。
+
+> 本仓库是脱敏公开版:**真实录音与其转写不在仓库里**(原因见 `docs/PUBLICATION.md`)。
+> 下面 0:00–0:40 与"真实识别错误"相关的步骤,要作者自己拿原件录音重跑
+> `demo/ingest_real_recording.py` 才复现;换任何人来讲这个项目,改用 `demo/seed_demo.py`
+> 的虚构会谈走同一条链路即可(步骤见本文最后一节),链路、权限与状态机完全相同。
 
 > 口径提醒:演示里不要说"准确率"。本仓库所有数字都是**单条录音、5 个问题**的实测,
 > 不构成整体指标;讲清楚"哪些是识别错误、哪些是阈值挡住、哪些是未确认"比报一个百分比更有价值。
