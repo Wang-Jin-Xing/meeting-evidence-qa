@@ -15,6 +15,57 @@
 (逐项拆解与自数命令见下文「当前真实模型组合」;该数字**会随调用增长**,以命令实数为准)。
 测试与评测**默认走 mock** 是为了不花钱、可复现,别把它误读成"项目没接模型"。
 
+## 快速开始（三步）
+
+```powershell
+docker compose -p mes up -d                                                                    # 1) 起 PostgreSQL 16 + pgvector
+python -m venv .venv; .\.venv\Scripts\python.exe -m pip install -r requirements.txt; Copy-Item .env.example .env   # 2) 装依赖 + 配置
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev_up.ps1 -Port 8100               # 3) 起 API + 独立 worker → http://127.0.0.1:8100/
+```
+
+> 第 2、3 步之间需执行 `.\.venv\Scripts\python.exe -m alembic upgrade head` 建表；
+> 完整步骤、测试、健康检查与演示账号见下方「启动步骤」。
+
+## 系统架构
+
+```mermaid
+flowchart TB
+  U["浏览器：上传录音 / 提问 / 确认纪要"]
+  API["API 进程（uvicorn app.main:app）<br/>上传只落盘 + 建任务，不调用任何模型"]
+  WK["独立 worker 进程（python -m app.worker）<br/>租约领取 / 续租 / fencing 守卫"]
+  DB[("PostgreSQL 16 + pgvector<br/>任务表 · 版本链 · 向量 · model_run 台账")]
+  FS[("storage/uploads 原件<br/>storage/derived 播放副本")]
+
+  U -- "HTTP + JWT" --> API
+  API --> DB
+  API --> FS
+  API -. "只落盘建任务，不做模型调用" .-> WK
+
+  P1["① prepare<br/>探测格式 · 切 10s 片"] --> P2["② transcribe<br/>faster-whisper 逐片 ASR"]
+  P2 --> P3["③ minutes<br/>DeepSeek 出结构化条目"]
+  P3 --> P4["④ index<br/>bge-m3 向量化入库"]
+  WK --> P1
+  P4 -. "四阶段各自带 epoch 校验提交" .-> DB
+
+  ASK["按权限检索证据 → 阈值筛选 → 证据不足拒答 → 带引用的回答"]
+  U -- "POST /ask" --> ASK
+  ASK --> DB
+  ASK -. "答案 + 引用（原文 / 时间 / 相似度）" .-> U
+
+  style API fill:#e8f0fe,stroke:#0f2b46
+  style WK fill:#e8f0fe,stroke:#0f2b46
+  style ASK fill:#fff4e5,stroke:#b26a00
+```
+
+**两条硬约束靠数据结构保证，不靠流程纪律**：
+
+- **版本只追加 + 双发布指针**：`active_transcript_version_id`（给人看的当前转写）与
+  `active_search_version_id`（检索的唯一依据）分开；索引没做完的版本哪怕被误标 `is_active`，
+  指针不匹配就检索不到。
+- **租约防双写**：API 与 worker 只经数据库任务表通信；worker 用 `clock_timestamp()`
+  （实时钟）做租约守卫，旧持有者提交时 epoch 不符即被拒（`LeaseLostError`），
+  任一时刻只有一个进程真正在写。
+
 ## 文档地图
 
 | 想知道 | 看哪里 |
